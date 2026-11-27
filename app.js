@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH}=WarehouseLayout;
+const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -52,8 +52,30 @@ function move(to,duration=550){animation={start:performance.now(),duration:match
 function stopFlight(){flight=[];animation=null;}
 function overview(top=false){stopFlight();move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?1.54:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
-function select(c){clearRoute(false);selected=c;$('address').textContent=c.id;$('detail').textContent=c.items.length?c.items.join(' / ')+' (тестовые данные)':'Тестовых товаров нет. Реальные остатки не подключены.';build();drawMini();updateActions();}
-function runSearch(q){clearRoute(false);hits=search(q);const result=$('results');result.replaceChildren();result.hidden=hits.length<2;if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent='Проверьте адрес или используйте тестовый артикул DEMO-003.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id;b.onclick=()=>select(c);result.append(b);}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+let inventoryReady=false,lastQuery='';
+function renderCellDetail(){
+ if(!selected)return;
+ $('address').textContent=selected.id;
+ $('detail').textContent=!inventoryReady?'Содержимое ячейки будет доступно после подключения к Warehouse Map.':selected.items.length?selected.items.join('\n'):'Ячейка пустая.';
+}
+function select(c){clearRoute(false);selected=c;renderCellDetail();build();drawMini();updateActions();}
+function renderMatches(){const result=$('results');result.replaceChildren();result.hidden=hits.length<2;
+ for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id+(inventoryReady?' · '+c.items.length+' поз.':'');b.onclick=()=>select(c);result.append(b);}
+}
+function refreshInventory(data,ready){
+ inventoryReady=ready;const stats=applyInventory(ready?data:null);
+ $('occupied-count').textContent=ready?String(stats.occupied):'—';
+ $('stock-badge').textContent=ready?stats.occupied+' / '+stats.total+' занято':'450 ячеек';
+ if(lastQuery){
+  hits=search(lastQuery);renderMatches();
+  if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;}
+  if(!selected){$('address').textContent='Не найдено';$('detail').textContent=ready?'Совпадений нет.': 'Войдите в Warehouse Map для поиска товаров.';}
+  $('message').textContent=ready?'Найдено: '+hits.length: 'Для поиска товара необходимо подключение.';
+ }
+ renderCellDetail();build();drawMini();updateActions();
+}
+window.WarehouseInventory={refresh:refreshInventory};
+function runSearch(q){clearRoute(false);lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function updateActions(){$('show-cell').disabled=!selected;$('route-cell').disabled=!selected;$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!selected;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(Math.PI/8));}
@@ -72,9 +94,9 @@ cameraDot=shape('circle',{cx:0,cy:0,r:4.5,fill:'#fff',stroke:'#131d27','stroke-w
 for(const p of points)pinButtons.get(p.id).setAttribute('aria-pressed',String(p.id===origin.id));for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin.id));$('mini-origin').textContent='Откуда: '+origin.name;$('origin-info').textContent='Откуда: '+origin.name+'. Выберите точку на 3D-карте или мини-карте.';}
 function updateCameraDot(){if(!cameraDot)return;const [x,y]=miniXY(cam.target[0],cam.target[2]);cameraDot.setAttribute('cx',clamp(x,5,335));cameraDot.setAttribute('cy',clamp(y,5,245));}
 function choosePoint(p){clearRoute(false);origin=p;build();drawMini();updateActions();move({target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(selected?'Можно проложить путь.':'Найдите ячейку.');}
-$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
+$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('example').onclick=()=>{$('search').value='S3, K7';runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
-function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
+function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Drag on the horizontal warehouse plane. Pixel scale follows camera zoom.
 function pan(dx,dy){
  const scale=2*cam.distance*Math.tan(Math.PI/8)/Math.max(1,canvas.clientHeight);

@@ -2,7 +2,6 @@
    Геометрия — условная, по приложенной схеме. Все размеры в метрах. */
 (function(root){
 const levels={left:['A','B','C','D','E'],right:['F','G','H','J','K']};
-const demo={'S1-A-2':['DEMO-001 · Крыло'],'S2-G-5':['DEMO-002 · Капот'],'S3-K-7':['DEMO-003 · Бампер'],'S4-C-3':['DEMO-004 · Фара'],'S5-F-9':['DEMO-003 · Бампер']};
 const STREET_SPACING=6.2, RACK_WIDTH=1.44, RACK_OFFSET=(STREET_SPACING-RACK_WIDTH)/2;
 const AISLE_WIDTH=2*RACK_OFFSET-RACK_WIDTH;
 const cells=[], racks=[], streets=[];
@@ -16,13 +15,30 @@ for(let s=1;s<=5;s++){
    for(let n=1;n<=10;n++){
     const z=n<=3?8.9-(n-1)*1.65:0.3-(n-4)*1.65;
     const id='S'+s+'-'+letter+'-'+n;
-    cells.push({id,street:'S'+s,side,letter,n,x:rackX,y:.55+i*.88,z,w:1.23,h:.76,d:1.51,items:demo[id]||[]});
+    cells.push({id,street:'S'+s,side,letter,n,x:rackX,y:.55+i*.88,z,w:1.23,h:.76,d:1.51,items:[]});
    }
   });
  }
 }
 function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*([1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+m[3]:null;}
-function search(value){const q=String(value).trim().toUpperCase();if(!q)return [];const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);return cells.filter(c=>c.items.some(item=>item.toUpperCase().includes(q)));}
+function applyInventory(data){
+ let occupied=0,lines=0;
+ for(const c of cells){
+  const raw=data?.[c.street]?.[c.letter]?.[String(c.n)];
+  c.items=typeof raw==='string'?raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];
+  if(c.items.length){occupied++;lines+=c.items.length;}
+ }
+ return {occupied,lines,total:cells.length};
+}
+function search(value){
+ const q=String(value).trim().toUpperCase();if(!q)return [];
+ const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);
+ const compact=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const article=compact(q),isArticle=/^[A-Z0-9\s._-]+$/.test(q)&&/[A-Z]/.test(article)&&/\d/.test(article)&&article.length>=4;
+ const normal=s=>s.toUpperCase().replace(/Ё/g,'Е').replace(/[^A-ZА-ЯІЇЄҐ0-9]+/g,' ').trim();
+ const words=normal(q).split(/\s+/).filter(Boolean);
+ return cells.filter(c=>c.items.some(item=>isArticle?compact(item).includes(article):words.length&&words.every(word=>normal(item).includes(word))));
+}
 function navigation(streets){
  const points=[{id:"entry",name:"Вход",x:-15,z:3},{id:"photo",name:"Фотозона",x:-14.2,z:8.7},...streets.map(s=>({id:s.id,name:s.id,x:s.x,z:3}))];
  function route(origin,cell){
@@ -73,5 +89,5 @@ function occlusion(cells,racks){
  }
  return {key,sections,blockers};
 }
-const layout={cells,racks,streets,search,normalizeAddress,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
