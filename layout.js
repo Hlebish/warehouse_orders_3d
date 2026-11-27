@@ -89,5 +89,23 @@ function occlusion(cells,racks){
  }
  return {key,sections,blockers};
 }
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function walkingPlan(origin,cell,route,streets){
+ if(!origin||!streets.some(s=>s.id===origin.id)||!cell)return [];
+ const path=route(origin,cell),height=1.68;
+ if(path.length<2)return [];
+ const yawTo=(a,b)=>Math.atan2(a.x-b.x,a.z-b.z);
+ const pose=(p,yaw,pitch=0,y=height)=>({eye:[p.x,y,p.z],yaw,pitch,distance:3});
+ const heading=yawTo(path[0],path[1]);
+ const plan=[{pose:pose(path[0],heading,1.54,14),duration:950,phase:'approach'},{pose:pose(path[0],heading,0),duration:950,phase:'descend'}];
+ let yaw=heading;
+ for(let i=1;i<path.length;i++){
+  const a=path[i-1],b=path[i],next=yawTo(a,b);
+  if(Math.abs(Math.atan2(Math.sin(next-yaw),Math.cos(next-yaw)))>.001)plan.push({pose:pose(a,next),duration:450,phase:'turn'});
+  plan.push({pose:pose(b,next),duration:Math.max(400,Math.hypot(b.x-a.x,b.z-a.z)*440),phase:'walk'});yaw=next;
+ }
+ const last=path.at(-1),lookYaw=yawTo(last,cell),lookPitch=Math.atan2(height-cell.y,Math.hypot(cell.x-last.x,cell.z-last.z));
+ plan.push({pose:pose(last,lookYaw,lookPitch),duration:650,phase:'arrive'});
+ return plan;
+}
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
