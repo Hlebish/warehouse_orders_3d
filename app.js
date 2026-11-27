@@ -75,16 +75,16 @@ function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();d
 let inventoryReady=false,lastQuery='';
 function renderCellDetail(){
  if(!selected)return;
+ $('result-expand').textContent=(inventoryReady?'Товары · '+selected.items.length:'Товары')+($('result-detail').hidden?' ▾':' ▴');
  $('address').textContent=selected.id;
  $('detail').textContent=!inventoryReady?'Содержимое ячейки будет доступно после подключения к Warehouse Map.':selected.items.length?selected.items.join('\n'):'Ячейка пустая.';
 }
-function select(c){clearRoute(false);selected=c;renderCellDetail();build();drawMini();updateActions();}
+function select(c){clearRoute(false);if(!selected){$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');}selected=c;renderCellDetail();build();drawMini();updateActions();}
 function renderMatches(){const result=$('results');result.replaceChildren();result.hidden=hits.length<2;
  for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id+(inventoryReady?' · '+c.items.length+' поз.':'');b.onclick=()=>select(c);result.append(b);}
 }
 function refreshInventory(data,ready){
  inventoryReady=ready;const stats=applyInventory(ready?data:null);
- $('occupied-count').textContent=ready?String(stats.occupied):'—';
  $('stock-badge').textContent=ready?stats.occupied+' / '+stats.total+' занято':'450 ячеек';
  if(lastQuery){
   hits=search(lastQuery);renderMatches();
@@ -95,9 +95,9 @@ function refreshInventory(data,ready){
  renderCellDetail();build();drawMini();updateActions();
 }
 window.WarehouseInventory={refresh:refreshInventory};
-function runSearch(q){clearRoute(false);lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+function runSearch(q){clearRoute(false);$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
-function updateActions(){$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&(!selected||!hasStreetOrigin());$('route-cell').textContent=walking?'Остановить':'Проложить путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!selected;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
+function updateActions(){const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&(!selected||!hasStreetOrigin());$('route-cell').textContent=walking?'Остановить':'Проложить путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(Math.PI/8));}
 function flyRoute(){
@@ -119,11 +119,12 @@ for(const p of points.filter(p=>p.id==='entry'||p.id==='photo')){const [x,y]=min
 if(routePath.length){let coords=routePath.map(p=>miniXY(p.x,p.z).join(',')).join(' ');if(selected)coords+=' '+miniXY(selected.x,selected.z).join(',');shape('polyline',{points:coords,fill:'none',stroke:'#62ccff','stroke-width':4,'stroke-linecap':'round','stroke-linejoin':'round'});}
 if(selected){const [x,y]=miniXY(selected.x,selected.z);shape('rect',{x:x-7,y:y-8,width:14,height:16,rx:2,fill:'#f5ca63',stroke:'#fff2bc','stroke-width':2});}
 cameraDot=shape('circle',{cx:0,cy:0,r:4.5,fill:'#fff',stroke:'#131d27','stroke-width':1.5});updateCameraDot();
-for(const p of points)pinButtons.get(p.id).setAttribute('aria-pressed',String(p.id===origin?.id));for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));$('mini-origin').textContent='Откуда: '+(hasStreetOrigin()?origin.name:'выберите S1–S5');$('origin-info').textContent=hasStreetOrigin()?'Откуда: '+origin.name+'.':'Выберите улицу S1–S5 на 3D-карте или мини-карте.';}
+for(const p of points)pinButtons.get(p.id).setAttribute('aria-pressed',String(p.id===origin?.id));for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));$('mini-origin').textContent='Откуда: '+(hasStreetOrigin()?origin.name:'выберите S1–S5');$('origin-info').textContent=hasStreetOrigin()?'Откуда: '+origin.name:'Старт: S1–S5';}
 function updateCameraDot(){if(!cameraDot)return;const p=walkView&&basis?basis.eye:cam.target;const [x,y]=miniXY(p[0],p[2]);cameraDot.setAttribute('cx',clamp(x,5,335));cameraDot.setAttribute('cy',clamp(y,5,245));}
 function choosePoint(p){clearRoute(false);walkView=false;origin=p;build();drawMini();updateActions();move({target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
-$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
-$('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('example').onclick=()=>{$('search').value='S3, K7';runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
+$('result-expand').onclick=()=>{const open=$('result-detail').hidden;$('result-detail').hidden=!open;$('result-expand').setAttribute('aria-expanded',String(open));renderCellDetail();};
+$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
+$('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
@@ -148,11 +149,12 @@ function flushGesture(){
  stopFlight();
  cam.distance=clamp(cam.distance*g.zoom,2.8,100);
  if(orbitMode){
-  cam.yaw=wrapAngle(cam.yaw-g.dx*.007-g.twist);
-  cam.pitch=clamp(cam.pitch+g.dy*.006,.09,1.54);
+  cam.yaw=wrapAngle(cam.yaw+g.dx*.007+g.twist);
+  cam.pitch=clamp(cam.pitch-g.dy*.006,.09,1.54);
  }else{
-  pan(g.dx,g.dy);
-  cam.yaw=wrapAngle(cam.yaw-g.twist);
+  // Two-finger input moves the camera in the gesture direction.
+  pan(-g.dx,-g.dy);
+  cam.yaw=wrapAngle(cam.yaw+g.twist);
  }
  dirty=true;
 }
