@@ -4,20 +4,28 @@ const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1]});
 function createShelfEditor(cells){
  const byId=new Map(cells.map(c=>[c.id,c]));
  const sameBay=(a,b)=>a&&b&&a.street===b.street&&a.side===b.side&&a.n===b.n;
- const adjacent=(a,b)=>sameBay(a,b)&&Math.abs(Math.abs(a.y-b.y)-.88)<1e-6;
+ const span=c=>c?.levelSpan||1;
+ const adjacent=(a,b)=>sameBay(a,b)&&span(a)===1&&span(b)===1&&Math.abs(Math.abs(a.y-b.y)-.88)<1e-6;
  function neighbor(id,dir){const c=byId.get(id);return cells.find(b=>adjacent(c,b)&&Math.sign(b.y-c.y)===dir)?.id||null;}
  function pair(ids){if(!Array.isArray(ids)||ids.length<1||ids.length>2||new Set(ids).size!==ids.length)return null;const cs=ids.map(id=>byId.get(id));if(cs.some(c=>!c)||cs.length===2&&!adjacent(cs[0],cs[1]))return null;return cs.sort((a,b)=>a.y-b.y).map(c=>c.id);}
+ function canUse(ids,model){const p=pair(ids);return !!p&&Object.hasOwn(MODELS,model)&&MODELS[model].includes(p.reduce((sum,id)=>sum+span(byId.get(id)),0));}
  function validate(raw){
   const out=[],used=new Set();
   if(!Array.isArray(raw))return out;
   for(const e of raw.slice(0,cells.length)){
-   const ids=pair(e?.ids),model=e?.model;
-   if(!ids||!Object.hasOwn(MODELS,model)||!MODELS[model].includes(ids.length)||ids.some(id=>used.has(id)))continue;
+   let rawIds=e?.ids;const model=e?.model;
+   // Migrate former A+B merges only in the long S1 section.
+   if(Array.isArray(rawIds)&&rawIds.length===2&&['hood','shelf'].includes(model)){
+    const cs=rawIds.map(id=>byId.get(id)),a=cs.find(c=>c?.street==='S1'&&c.letter==='A'&&span(c)===2),b=cs.find(c=>c?.street==='S1'&&c.letter==='B');
+    if(a&&b&&sameBay(a,b))rawIds=[a.id];
+   }
+   const ids=pair(rawIds);
+   if(!ids||!canUse(ids,model)||ids.some(id=>used.has(id)))continue;
    ids.forEach(id=>used.add(id));out.push({ids,model});
   }
   return out;
  }
- function index(entries){return new Map(entries.flatMap(e=>e.ids.map(id=>[id,e])));}
+ function index(entries){const map=new Map(entries.flatMap(e=>e.ids.map(id=>[id,e])));for(const c of cells)if(c.street==='S1'&&c.letter==='A'&&span(c)===2&&!map.has(c.id))map.set(c.id,{ids:[c.id],model:'hood'});return map;}
  function group(entries,id){return entries.find(e=>e.ids.includes(id))?.ids.slice()||[id];}
  function pick(entries,current,id,replace=false){
   if(!byId.has(id))return current.slice();
@@ -34,15 +42,15 @@ function createShelfEditor(cells){
  }
  function apply(entries,ids,model){
   ids=pair(ids);if(!ids)return null;
-  if(model!=='default'&&(!Object.hasOwn(MODELS,model)||!MODELS[model].includes(ids.length)))return null;
+  if(model!=='default'&&!canUse(ids,model))return null;
   // A two-level shelf is indivisible until explicitly reset. Do not silently erase half.
   if(entries.some(e=>e.ids.some(id=>ids.includes(id))&&e.ids.some(id=>!ids.includes(id))))return null;
   const next=entries.filter(e=>!e.ids.some(id=>ids.includes(id)));
   if(model!=='default')next.push({ids,model});
   return validate(next);
  }
- function bounds(entry){const cs=entry.ids.map(id=>byId.get(id));const c=cs[0],last=cs.at(-1);return {x:c.x,z:c.z,y:(c.y+last.y)/2,w:c.w,h:last.y-c.y+c.h,d:c.d,base:c.y-c.h/2,top:last.y+last.h/2,cells:cs};}
- return {validate,index,group,pick,extend,apply,bounds,neighbor};
+ function bounds(entry){const cs=entry.ids.map(id=>byId.get(id));const c=cs[0],last=cs.at(-1),base=c.y-c.h/2,top=last.y+last.h/2;return {x:c.x,z:c.z,y:(base+top)/2,w:c.w,h:top-base,d:c.d,base,top,cells:cs};}
+ return {validate,index,group,pick,extend,apply,bounds,neighbor,canUse};
 }
 // Reference: tightly packed shaped cardboard envelopes, wooden pallets and teal piston cartons.
 function pallet(box,b){

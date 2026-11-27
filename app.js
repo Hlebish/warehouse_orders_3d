@@ -85,7 +85,8 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
   for(const q of bays){
    const stack=lowerByBay.get(q.n);
    for(let i=0;i<=5;i++){
-    const lower=stack[i-1],upper=stack[i];
+    if(stack.some(c=>i>c.levelStart&&i<c.levelStart+c.levelSpan))continue;
+    const lower=stack.find(c=>c.levelStart+c.levelSpan===i),upper=stack.find(c=>c.levelStart===i);
     const group=lower&&shelfIndex.get(lower.id);
     if(group&&upper&&group.ids.includes(upper.id))continue;
     for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425])box(xx,.12+i*.88,q.z,.08,.085,1.64,'b5262d');
@@ -105,8 +106,8 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
     const color=tone(member);
     box(member.x+side*.69,member.y-member.h/2+.07,member.z,.035,.09,member.d-.12,color);
     if(!highlight(member))continue;
-    box(member.x+side*.64,member.y,member.z-member.d/2+.03,.035,.64,.045,'f5ca63');
-    box(member.x+side*.64,member.y,member.z+member.d/2-.03,.035,.64,.045,'f5ca63');
+    box(member.x+side*.64,member.y,member.z-member.d/2+.03,.035,member.h-.12,.045,'f5ca63');
+    box(member.x+side*.64,member.y,member.z+member.d/2-.03,.035,member.h-.12,.045,'f5ca63');
    }
   }
  }
@@ -223,12 +224,12 @@ function updateShelfEditor(){
  $('edit-upper').disabled=!shelfEditor.extend(shelfDesign,editIds,1);
  $('edit-lower').disabled=!shelfEditor.extend(shelfDesign,editIds,-1);
  $('edit-shelf').disabled=!editIds.length;
- $('edit-wing').disabled=editIds.length!==1;
- $('edit-piston').disabled=editIds.length!==1;
- $('edit-hood').disabled=editIds.length!==2;
- $('edit-reset').disabled=!editIds.some(id=>shelfIndex.has(id));
+ $('edit-wing').disabled=!shelfEditor.canUse(editIds,'wing');
+ $('edit-piston').disabled=!shelfEditor.canUse(editIds,'piston');
+ $('edit-hood').disabled=!shelfEditor.canUse(editIds,'hood');
+ $('edit-reset').disabled=!editIds.some(id=>shelfDesign.some(e=>e.ids.includes(id)));
  $('edit-focus').disabled=!editIds.length;
- $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1?'Крылья и поршни: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
+ $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'Длинная секция S1: A — два уровня.':editIds.length===1?'Крылья и поршни: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
 }
 function setEditSelection(ids){
  editIds=ids.slice();selected=cells.find(c=>c.id===editIds[0])||null;
@@ -285,9 +286,11 @@ $('focus-cell').onclick=focusSelected;
 function refreshInventory(data,ready){
  const wasReady=inventoryReady,previous=selected,oldHits=hits,oldItems=cells.map(c=>c.items);
  inventoryReady=ready;const stats=applyInventory(ready?data:null);
+ const omitted=ready?WarehouseLayout.unmappedS1E(data):0;
+ $('stock-badge').title=omitted?'На S1-E4…E10 ещё есть записи в основной базе: '+omitted+'. Эти адреса отсутствуют в 3D-схеме.':'Заполненность физических адресов 3D-карты';
+ $('stock-badge').textContent=(ready?stats.occupied+' / '+stats.total+' занято':cells.length+' ячеек')+(omitted?' · E: '+omitted+' вне карты':'');
  const inventoryChanged=wasReady!==ready||cells.some((c,i)=>c.items!==oldItems[i]);
  if(!inventoryChanged)return;
- $('stock-badge').textContent=ready?stats.occupied+' / '+stats.total+' занято':'450 ячеек';
  if(lastQuery){
   hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
   if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;if(linkedOrder&&selected&&!manualOrigin)focusOrderStreet(selected);}

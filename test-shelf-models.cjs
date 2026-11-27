@@ -13,13 +13,13 @@ assert.equal(e.apply(s,['S3-E-1','S3-F-1'],'hood'),null);
 assert.equal(e.apply(s,['S3-A-1','S4-B-1'],'hood'),null);
 assert.deepEqual(e.extend(s,['S3-A-1'],1),['S3-A-1','S3-B-1']);
 s=e.apply(s,['S3-B-1','S3-A-1'],'hood');assert.deepEqual(s,[{ids:['S3-A-1','S3-B-1'],model:'hood'}]);
-assert.equal(e.index(s).size,2);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
+assert.equal(e.index(s).size,9);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
 assert.equal(e.apply(s,['S3-B-1'],'wing'),null);
 assert.deepEqual(e.apply(s,['S3-B-1','S3-A-1'],'default'),[]);
 assert.deepEqual(e.validate([{ids:['bogus'],model:'wing'},{ids:['S1-A-1','S1-B-1'],model:'wing'},{ids:['S1-A-1'],model:'__proto__'}]),[]);
 assert.equal(e.validate([...s,...s]).length,1);
 for(const c of cells){
- const wing=e.apply([], [c.id],'wing');assert(wing);const b=e.bounds(wing[0]);assert.equal(b.cells.length,1);
+ const wing=e.apply([], [c.id],'wing');if(c.levelSpan===2){assert.equal(wing,null);assert(e.apply([], [c.id],'hood'));continue;}assert(wing);const b=e.bounds(wing[0]);assert.equal(b.cells.length,1);
  const above=e.neighbor(c.id,1);if(above){const pair=e.apply([], [c.id,above],'hood');assert(pair);const bb=e.bounds(pair[0]);assert(Math.abs(bb.h-1.64)<1e-8);}
 }
 
@@ -43,7 +43,7 @@ for(const model of ['wing','hood','piston','shelf'])for(const side of [-1,1]){
  }else assert.equal(points.length,0);
  if(model==='piston'){const stock=boxes.filter(v=>['126d83','197f92','1d7183','268b9a'].includes(v[6]));assert(stock.length>50);assert(new Set(stock.map(v=>v[2])).size===5);assert(new Set(stock.map(v=>v[1])).size===6);}
 }
-assert.equal(cells.length,450);
+assert.equal(cells.length,443);
 console.log('Reference shelf models and editor passed');
 
 for(const model of ['wing','hood','piston']){
@@ -64,8 +64,8 @@ const {packingPlan}=require('./shelf-models.js');
 const layouts={wing:new Set(),hood:new Set()};
 for(const c of cells)for(const model of ['wing','hood']){
  const above=e.neighbor(c.id,1);
- if(model==='hood'&&!above)continue;
- const b=e.bounds(e.apply([],model==='hood'?[c.id,above]:[c.id],model)[0]);
+ if(model==='hood'&&!above&&c.levelSpan!==2||model==='wing'&&c.levelSpan===2)continue;
+ const b=e.bounds(e.apply([],model==='hood'&&c.levelSpan!==2?[c.id,above]:[c.id],model)[0]);
  const plan=packingPlan(b,model);
  assert.deepEqual(plan,packingPlan(b,model));
  assert.equal(new Set(plan.map(p=>p.variant)).size,3);
@@ -94,4 +94,21 @@ for(const model of ['wing','hood','piston']){
  const b=e.bounds(e.apply([],model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'],model)[0]);
  const mesh=flag=>{let boxes=0,quads=0;drawShelf(()=>boxes++,()=>quads++,b,model,1,'53677a',flag);return {boxes,quads};};
  if(model==='piston')assert.deepEqual(mesh(false),mesh(true));else{assert.equal(mesh(false).quads,0);assert(mesh(true).quads>0);}
+}
+
+for(let n=4;n<=10;n++){
+ const a='S1-A-'+n,b='S1-B-'+n,d='S1-D-'+n;
+ assert.equal(e.index([]).get(a).model,'hood');
+ assert.equal(e.canUse([a],'hood'),true);assert.equal(e.canUse([a],'wing'),false);assert.equal(e.canUse([a],'piston'),false);
+ assert.equal(e.extend([],[a],1),null);assert.equal(e.extend([],[b],-1),null);assert.equal(e.neighbor(d,1),null);
+ assert.deepEqual(e.validate([{ids:[a,b],model:'hood'}]),[{ids:[a],model:'hood'}]);
+ assert.deepEqual(e.validate([{ids:['S1-E-'+n],model:'wing'}]),[]);
+ const bounds=e.bounds(e.index([]).get(a));assert(Math.abs(bounds.h-1.64)<1e-8);
+ let visible=0;drawShelf(()=>{},pts=>{assert(pts.every(p=>p[1]>=bounds.base-.001&&p[1]<=bounds.top+.001));visible++;},bounds,'hood',-1,'53677a',true);assert(visible>0);
+}
+for(let n=1;n<=3;n++){
+ const a='S1-A-'+n,b='S1-B-'+n;
+ assert(!e.index([]).has(a));assert.equal(e.canUse([a],'wing'),true);assert.equal(e.canUse([a],'hood'),false);
+ assert.deepEqual(e.validate([{ids:[a,b],model:'hood'}]),[{ids:[a,b],model:'hood'}]);
+ assert.equal(e.neighbor('S1-D-'+n,1),'S1-E-'+n);
 }
