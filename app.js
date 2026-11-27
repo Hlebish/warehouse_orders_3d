@@ -165,7 +165,7 @@ function runSearch(q){linkedOrder=null;clearRoute(false);$('result-detail').hidd
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
 function updateActions(){$('route-origin').value=hasStreetOrigin()?origin.id:'';$('route-origin').disabled=walking;const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&!selected;$('route-cell').textContent=walking?'■ Остановить':'▶ В путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
-function wideStreetPose(p){return streetOverviewPose(p,canvas.clientWidth/Math.max(1,canvas.clientHeight),HALF_FOV);}
+function wideStreetPose(p){const rect=canvas.getBoundingClientRect();const w=rect.width||canvas.clientWidth||window.innerWidth||380,h=rect.height||canvas.clientHeight||window.innerHeight||640;return streetOverviewPose(p,Math.max(.25,w/Math.max(1,h)),HALF_FOV);}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
 function flyRoute(){
  if(walking){stopFlight();return;}
@@ -260,5 +260,8 @@ if(incoming.addresses.length||incoming.article){
  if(hits.length){selected=hits[0];focusOrderStreet(selected);renderCellDetail();$('message').textContent='Из заказа · '+hits.length+' адрес(а)';}
  else{$('address').textContent='Поиск позиции заказа';$('detail').textContent='После подключения к Warehouse Map проверим точный артикул.';}
 }
-build();drawMini();updateActions();requestAnimationFrame(frame);
+build();drawMini();updateActions();
+// Refit once the linked-result panel has taken its final layout space.
+if(linkedOrder&&selected&&origin)Object.assign(cam,wideStreetPose(origin));
+requestAnimationFrame(frame);
 })();
