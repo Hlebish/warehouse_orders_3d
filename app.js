@@ -15,7 +15,13 @@ const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const cam={target:[0,0,0],yaw:.24,pitch:.78,distance:47};
 const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
 let basis;
-function camera(){const {target,yaw,pitch,distance}=cam;const eye=add(target,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]),forward=norm(sub(target,eye)),right=norm(cross(forward,[0,1,0])),up=cross(right,forward);return {eye,forward,right,up,aspect:canvas.width/canvas.height,zoom:1/Math.tan(Math.PI/8)};}
+function cameraAxes(yaw,pitch){
+ const sy=Math.sin(yaw),cy=Math.cos(yaw),sp=Math.sin(pitch);
+ // Exact vertical view: no floating point height drift or singular cross product.
+ const cp=Math.abs(Math.abs(pitch)-Math.PI/2)<1e-9?0:Math.cos(pitch);
+ return {right:[cy,0,-sy],up:[-sy*sp,cp,-cy*sp],forward:[-sy*cp,-sp,-cy*cp]};
+}
+function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(yaw,pitch);const eye=sub(target,mul(axes.forward,distance));return {eye,...axes,aspect:canvas.width/canvas.height,zoom:1/Math.tan(Math.PI/8)};}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function box(x,y,z,w,h,d,hex){const a=w/2,b=h/2,e=d/2;const v=[[-a,-b,-e],[a,-b,-e],[a,b,-e],[-a,b,-e],[-a,-b,e],[a,-b,e],[a,b,e],[-a,b,e]].map(p=>add(p,[x,y,z]));const color=rgb(hex);for(const [ids,shade] of [[[0,1,2,3],.7],[[4,5,6,7],.93],[[0,4,7,3],.76],[[1,5,6,2],.84],[[3,2,6,7],1.15],[[0,1,5,4],.55]]){let c=color.map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...v[ids[i]],...c);}}
 function build(){vertices=[];ghostVertices=[];box(0,-.18,-.6,33,.32,24,'536172');
@@ -70,7 +76,7 @@ function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
 function startWalkStep(step){const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.duration);animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
-function overview(top=false){stopFlight();walkView=false;move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?1.54:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
+function overview(top=false){stopFlight();walkView=false;move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?Math.PI/2:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
 let inventoryReady=false,lastQuery='';
 function renderCellDetail(){
@@ -129,8 +135,7 @@ function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
  const scale=2*cam.distance*Math.tan(Math.PI/8)/Math.max(1,canvas.clientHeight);
- const right=[Math.cos(cam.yaw),0,-Math.sin(cam.yaw)];
- const up=[-Math.sin(cam.yaw)*Math.sin(cam.pitch),Math.cos(cam.pitch),-Math.cos(cam.yaw)*Math.sin(cam.pitch)];
+ const {right,up}=cameraAxes(cam.yaw,cam.pitch);
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
@@ -150,7 +155,7 @@ function flushGesture(){
  cam.distance=clamp(cam.distance*g.zoom,2.8,100);
  if(orbitMode){
   cam.yaw=wrapAngle(cam.yaw+g.dx*.007+g.twist);
-  cam.pitch=clamp(cam.pitch-g.dy*.006,.09,1.54);
+  cam.pitch=clamp(cam.pitch-g.dy*.006,.09,Math.PI/2);
  }else{
   // Two-finger input moves the camera in the gesture direction.
   pan(-g.dx,-g.dy);
@@ -177,7 +182,7 @@ canvas.addEventListener('pointermove',e=>{
  if(pointers.size===2){pairDirty=true;moved=true;}
  else if(pointers.size===1&&start){
   if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;
-  if(moved){if(start.button===2||e.shiftKey)pan(dx,dy);else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.09,1.54);}dirty=true;}
+  if(moved){if(start.button===2||e.shiftKey)pan(dx,dy);else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.09,Math.PI/2);}dirty=true;}
  }
 });
 function finishPointer(e,cancel=false){
