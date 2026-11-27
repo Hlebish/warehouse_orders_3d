@@ -123,3 +123,15 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 .topbar form #reset-search{font-size:19px;line-height:1;min-height:30px;padding:2px 7px;background:transparent;border-color:transparent;color:#a9bfce;flex:0 0 auto}#results{position:relative}#route-distance{font-size:10px;color:#a9c0d0;line-height:1.2}#route-progress{width:100%;height:4px;appearance:none;border:0;border-radius:4px;background:#314557;overflow:hidden;accent-color:#b4e77d}#route-progress::-webkit-progress-bar{background:#314557}#route-progress::-webkit-progress-value{background:#b4e77d}#route-progress::-moz-progress-bar{background:#b4e77d}.topbar .syncbar[data-state=offline] #sync-status{color:#e7c27a}.topbar .syncbar[data-state=offline] #sync-detail{display:block;font-size:9px;max-width:170px;line-height:1.2}.topbar .syncbar[data-state=offline] #sync-detail{white-space:normal}
 
 #restore-cell{flex:0 0 auto;min-height:27px;padding:3px 6px;font-size:10px;line-height:1.2;color:#f5d78e;border-color:#a58f58;background:#263548;border-radius:6px;white-space:nowrap} .route-caption-row:has(#restore-cell:not([hidden])) #route-caption{font-size:10px}
+
+/* Shelf editor replaces the route overlay, never resizes the canvas. */
+#edit-mode[aria-pressed=true]{background:#d4b565;color:#23251e;border-color:#f5ca63;font-weight:750}
+#edit-panel{position:absolute;z-index:6;left:10px;bottom:10px;width:min(232px,calc(100% - 20px));max-height:48%;overflow:auto;display:grid;gap:5px;padding:8px;background:#132333f3;border:1px solid #8f8059;border-radius:10px;box-shadow:0 5px 18px #0005;overscroll-behavior:contain}
+#edit-panel[hidden],#route-overlay[hidden]{display:none!important}
+.edit-head{display:flex;align-items:center;gap:5px;justify-content:space-between}.edit-head strong{font-size:11px;overflow-wrap:anywhere;min-width:0}
+#edit-panel small{font-size:10px;line-height:1.3;color:#b7c9d8}
+#edit-panel #edit-current,#edit-panel #edit-status{color:#e8cb86}
+#edit-panel #edit-status:empty{display:none}.edit-pair,.edit-models{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+#edit-panel button{min-height:30px;padding:4px 5px;font-size:11px;white-space:normal;line-height:1.2}
+#edit-panel button:disabled{opacity:.35;cursor:default}
+@media(max-height:450px){#edit-panel{max-height:65%;width:min(220px,46%);padding:5px;gap:3px}#edit-panel button{min-height:25px;font-size:10px}}
