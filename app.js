@@ -77,8 +77,8 @@ function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
 const WALK_SPEEDS=[.5,.75,1,1.25,1.5,2,3];
-function validWalkSpeed(value){const n=Number(value);return WALK_SPEEDS.includes(n)?n:1;}
-let walkSpeed=1;
+function validWalkSpeed(value){const n=Number(value);return WALK_SPEEDS.includes(n)?n:3;}
+let walkSpeed=3;
 try{walkSpeed=validWalkSpeed(localStorage.getItem('warehouse3d.walkSpeed'));}catch{}
 function retimeWalk(step,now,speed){
  if(!step||step.phase!=='walk'||step.reducedMotion)return;
