@@ -123,14 +123,8 @@ function focusOrderStreet(cell){
  Object.assign(cam,wideStreetPose(origin));
  basis=camera();dirty=true;
 }
-function renderCellDetail(){
- renderArticlePopup();
- if(!selected)return;
- $('result-expand').textContent=(inventoryReady?'Товары · '+selected.items.length:'Товары')+($('result-detail').hidden?' ▾':' ▴');
- $('address').textContent=selected.id;
- $('detail').textContent=!inventoryReady?'Содержимое ячейки будет доступно после подключения к Warehouse Map.':selected.items.length?selected.items.join('\n'):'Ячейка пустая.';
-}
-function select(c){clearRoute(false);if(!selected){$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');}selected=c;if(linkedOrder)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}
+function renderCellDetail(){renderArticlePopup();}
+function select(c){clearRoute(false);selected=c;if(linkedOrder)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}
 function renderMatches(){const result=$('results');result.replaceChildren();result.hidden=hits.length<2;
  for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id+(inventoryReady?' · '+c.items.length+' поз.':'');b.onclick=()=>select(c);result.append(b);}
 }
@@ -140,16 +134,27 @@ function refreshInventory(data,ready){
  if(lastQuery){
   hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
   if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;if(linkedOrder&&selected)focusOrderStreet(selected);}
-  if(!selected){$('address').textContent='Не найдено';$('detail').textContent=ready?'Совпадений нет.': 'Войдите в Warehouse Map для поиска товаров.';}
-  $('message').textContent=ready?'Найдено: '+hits.length: 'Для поиска товара необходимо подключение.';
+  
+  $('message').textContent=ready?(hits.length?'Найдено: '+hits.length:'Совпадений нет.'):'Для поиска товара необходимо подключение.';
  }
  renderCellDetail();build();updateNavigationMarkers();updateActions();
 }
 window.WarehouseInventory={refresh:refreshInventory};
-function runSearch(q){linkedOrder=null;clearRoute(false);$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+function runSearch(q){linkedOrder=null;clearRoute(false);lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;renderArticlePopup();$('message').textContent=inventoryReady?'Совпадений нет.':'Для поиска товара войдите через Google.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
-function updateActions(){$('route-origin').value=hasStreetOrigin()?origin.id:'';$('route-origin').disabled=walking;const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&!selected;$('route-cell').textContent=walking?'■ Остановить':'▶ В путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
-function showCell(){if(!selected)return;clearRoute(false);build();updateNavigationMarkers();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели. Камера не перемещается.';}
+function updateActions(){
+ $('route-origin').value=hasStreetOrigin()?origin.id:'';$('route-origin').disabled=walking;
+ // Direct taps and single matches need only the anchored cell popup.
+ // Multiple search addresses or a failed search use an out-of-flow overlay.
+ const showResults=!!lastQuery&&(hits.length>1||!selected);
+ $('result-panel').hidden=!showResults;
+ $('result-count').textContent=hits.length>1?'Найдено: '+hits.length:'Поиск';
+ $('message').hidden=hits.length>1;
+ $('route-cell').disabled=!walking&&!selected;
+ $('route-cell').textContent=walking?'■ Остановить':'▶ В путь';
+ $('clear-route').hidden=!routePath.length;
+ $('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;
+}
 function wideStreetPose(p){const rect=canvas.getBoundingClientRect();const w=rect.width||canvas.clientWidth||window.innerWidth||380,h=rect.height||canvas.clientHeight||window.innerHeight||640;return streetOverviewPose(p,Math.max(.25,w/Math.max(1,h)),HALF_FOV);}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
 function flyRoute(){
@@ -163,11 +168,10 @@ function flyRoute(){
  build();updateNavigationMarkers();updateActions();startWalkStep(flight.shift());
  $('message').textContent='Маршрут: '+origin.name+' → '+selected.id;
 }
-function updateNavigationMarkers(){for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));$('origin-info').textContent=hasStreetOrigin()?'Откуда: '+origin.name:'Старт: S1–S5';}
+function updateNavigationMarkers(){for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));}
 function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();updateNavigationMarkers();updateActions();move(wideStreetPose(p),650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
-$('result-expand').onclick=()=>{const open=$('result-detail').hidden;$('result-detail').hidden=!open;$('result-expand').setAttribute('aria-expanded',String(open));renderCellDetail();};
-function clearSelection(){clearRoute(false);selected=null;renderArticlePopup();selectionTag.hidden=true;hits=[];lastQuery='';linkedOrder=null;$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();}
-$('clear-selection').onclick=clearSelection;$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};
+function clearSelection(){clearRoute(false);selected=null;renderArticlePopup();selectionTag.hidden=true;hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();}
+$('clear-selection').onclick=clearSelection;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,Math.max(100,wideStreetPose({x:12.4,z:3}).distance*1.25));dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}else if(selected||lastQuery||routePath.length)clearSelection();}
 // Pan in the camera's viewing plane, including world height when tilted.
@@ -241,7 +245,7 @@ if(incoming.addresses.length||incoming.article){
  linkedOrder=incoming;lastQuery=incoming.article||incoming.addresses[0].id;$('search').value=lastQuery;
  hits=linkedHits();renderMatches();
  if(hits.length){selected=hits[0];focusOrderStreet(selected);renderCellDetail();$('message').textContent='Из заказа · '+hits.length+' адрес(а)';}
- else{$('address').textContent='Поиск позиции заказа';$('detail').textContent='После подключения к Warehouse Map проверим точный артикул.';}
+ else{$('message').textContent='После подключения к Warehouse Map проверим точный артикул.';}
 }
 build();updateNavigationMarkers();updateActions();
 // Refit once the linked-result panel has taken its final layout space.
