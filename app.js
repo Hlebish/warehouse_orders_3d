@@ -174,7 +174,7 @@ function flushGesture(){
    cam.yaw=wrapAngle(cam.yaw+g.dx*.007);
    cam.pitch=clamp(cam.pitch-g.dy*.006,.09,Math.PI/2);
   }else{
-   pan(-g.dx,-g.dy);
+   pan(g.dx,-g.dy);
   }
  }else{
   // Relative finger motion is pinch/twist, without accidental translation.
