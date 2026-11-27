@@ -30,6 +30,31 @@ function applyInventory(data){
  }
  return {occupied,lines,total:cells.length};
 }
+// The source map imports "АРТИКУЛ — ОПИСАНИЕ" (or a standalone article).
+// Legacy free-text rows are handled conservatively: never show a description as a code.
+function cellArticles(items){
+ const out=[];
+ for(const value of items||[]){
+  const text=String(value||'').trim();if(!text)continue;
+  const split=text.match(/^(.*?)\s+[—–]\s+/u);
+  let code=split?split[1].trim():'';
+  if(!split){
+   const tokens=text.split(/\s+/),parts=[];
+   for(const t of tokens){
+    if(!/^[\p{L}\p{N}._/+()-]+$/u.test(t))break;
+    if(!/\d/.test(t)&&(!/^[A-ZА-ЯІЇЄҐ]{1,4}$/u.test(t)))break;
+    parts.push(t);
+   }
+   code=parts.join(' ');
+   if(!/\d/.test(code))code='';
+   // An explicitly stored one-token article may be letters only.
+   if(!code&&/^[A-ZА-ЯІЇЄҐ][A-ZА-ЯІЇЄҐ._/+()-]{1,30}$/u.test(text)&&text!=='БЕЗ АРТИКУЛА')code=text;
+  }
+  if(code&&!/^БЕЗ\s+АРТИКУЛА$/iu.test(code))out.push(code);
+ }
+ return out;
+}
+
 function search(value){
  const q=String(value).trim().toUpperCase();if(!q)return [];
  const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);
@@ -119,5 +144,5 @@ function streetOverviewPose(point,aspect,halfFov){
  return {target:[point.x*bias,0,centerZ+(point.z-centerZ)*bias],yaw:0,pitch:Math.PI/2,distance};
 }
 
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

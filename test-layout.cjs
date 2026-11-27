@@ -30,3 +30,5 @@ for(const aspect of [.25,.32,.45,.58,.6,.8,1,1.5,2.2,3]){const half=65*Math.PI/3
 console.log('OK: larger portrait framing and constant scale for all navigation points');
 
 const {sections}=require('./layout.js');assert.equal(sections.length,18);assert.equal(sections.flatMap(s=>s.members).length,450);assert.equal(new Set(sections.flatMap(s=>s.members.map(c=>c.id))).size,450);assert(!('blockers' in require('./layout.js')));console.log('OK: all rack sections rendered, no occlusion mechanism');
+
+const {cellArticles}=require('./layout.js');assert.deepEqual(cellArticles(['APBM2802 — Крыло','APBM2802A — Крыло алюминиевое','FP 4819 311 — Крыло','S BD S875 — Колодки','КН3755 280 Капот','AP MZ 1402 C','000123 — Деталь','БЕЗ АРТИКУЛА — Капот','Капот','APAU1603-2']),['APBM2802','APBM2802A','FP 4819 311','S BD S875','КН3755 280','AP MZ 1402 C','000123','APAU1603-2']);assert.deepEqual(cellArticles([]),[]);assert.deepEqual(cellArticles(['ABC — Описание','AB-1 — <script>']),['ABC','AB-1']);

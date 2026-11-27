@@ -95,3 +95,6 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 #return-order{flex:0 0 auto;min-height:39px;padding:8px 12px;font-size:13px;font-weight:700;background:#253d50;border-color:#668da6;color:#eaf5ff}@media(max-width:760px){.topbar #return-order{order:-2;min-height:34px;font-size:12px}.topbar:has(#return-order:not([hidden])) form{flex:1 1 170px;width:auto}.topbar:has(#return-order:not([hidden])) .syncbar{flex:1 1 65%}}
 /* Canvas and scene labels must share the same native touch policy. */
 #gl,#labels,#labels .scene-pin{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+
+/* Compact, non-interactive stock list anchored to the selected cell. */
+.cell-article-popup{position:absolute;transform:translateX(-50%);z-index:4;pointer-events:none;padding:4px 7px;border:1px solid #bda45e;border-radius:7px;background:#142330f5;color:#f1e7c7;box-shadow:0 3px 10px #0005;font:600 11px/19px system-ui,sans-serif;text-align:left;overflow:hidden}.cell-article-popup>div{height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cell-article-popup>div+div{border-top:1px solid #ffffff13}.cell-article-popup>div:last-child{color:#f1e7c7}
