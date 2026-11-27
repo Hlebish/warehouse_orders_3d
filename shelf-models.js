@@ -121,10 +121,11 @@ function pistonStock(box,b,base,side){
   }
  }
 }
-function drawShelf(box,quad,b,model,side,accent){
+function drawShelf(box,quad,b,model,side,accent,showStock=true){
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
  if(model==='shelf')return;
  const base=pallet(box,b);
+ if(!showStock)return;
  if(model==='piston'){pistonStock(box,b,base,side);return;}
  const wing=model==='wing',count=wing?5:4,pitch=(b.d-.22)/count;
  for(let i=0;i<count;i++){

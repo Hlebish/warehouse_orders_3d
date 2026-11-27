@@ -67,3 +67,16 @@ for(const c of cells){const p=points.find(p=>p.id===c.street);assert(Math.abs(ro
 applyInventory({S1:{A:{1:'Другой товар ABC',2:'ABC — Товар',3:'APBM2802A — Деталь',4:'APBM2802 — Деталь'}}});
 assert.equal(search('ABC')[0].id,'S1-A-2');assert.equal(search('APBM2802')[0].id,'S1-A-4');assert.equal(search('APBM2802')[0].id,'S1-A-4');
 applyInventory({S1:{A:{1:'ABC — Товар'}}});assert.equal(search('ABC')[0].id,'S1-A-1');assert.equal(search('APBM2802').length,0);applyInventory(null);
+
+const {inventoryLines,cellTone}=require('./layout.js');
+assert.deepEqual(inventoryLines(' \n\u200b\u2060\n\uFEFF\n\t'),[]);
+assert.deepEqual(inventoryLines(' APBM2802 — Крыло \n\u200b\n APBM2802A '),['APBM2802 — Крыло','APBM2802A']);
+assert.equal(inventoryLines(null).length,0);
+applyInventory({S3:{A:{1:'\u200b',2:'APBM2802 — Крыло'}}});
+const empty=search('S3-A-1')[0],filled=search('S3-A-2')[0];
+assert.equal(empty.items.length,0);assert.equal(cellTone(empty,true,false,false),'53677a');assert.equal(cellTone(empty,true,false,true),'53677a');assert.equal(cellTone(filled,true,false,false),'6bb58b');assert.equal(cellTone(filled,false,false,false),'53677a');assert.equal(cellTone(empty,true,true,false),'f5ca63');
+applyInventory(null);assert.equal(cellTone(filled,true,false,false),'53677a');
+const blockedNear={x:150,y:200,width:40,height:20};
+const onlyTop=[{left:0,right:300,top:105,bottom:500}];
+const free=articlePopupPosition(blockedNear,75,40,300,500,onlyTop);
+assert(free);assert(free.top+40<=100);

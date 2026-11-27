@@ -45,3 +45,10 @@ for(const model of ['wing','hood','piston','shelf'])for(const side of [-1,1]){
 }
 assert.equal(cells.length,450);
 console.log('Reference shelf models and editor passed');
+
+for(const model of ['wing','hood','piston']){
+ const b=e.bounds(e.apply([],model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'],model)[0]);
+ let boxes=[],quads=0;
+ drawShelf((...v)=>boxes.push(v),()=>quads++,b,model,1,'53677a',false);
+ assert.equal(quads,0);assert.equal(boxes.length,9);assert(!boxes.some(v=>['126d83','197f92','1d7183','268b9a','6bb58b'].includes(v[6])));
+}

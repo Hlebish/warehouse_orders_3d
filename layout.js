@@ -21,11 +21,19 @@ for(let s=1;s<=5;s++){
  }
 }
 function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*(0?[1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+Number(m[3]):null;}
+// Invisible-only legacy cell strings are not physical stock.
+function inventoryLines(raw){
+ if(typeof raw!=='string')return [];
+ return raw.split(/\r?\n/).map(line=>line.replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').trim()).filter(Boolean);
+}
+function cellTone(cell,ready,selected,matched){
+ return selected?'f5ca63':!ready?'53677a':matched&&cell.items.length?'d09e50':cell.items.length?'6bb58b':'53677a';
+}
 function applyInventory(data){
  let occupied=0,lines=0;
  for(const c of cells){
   const raw=data?.[c.street]?.[c.letter]?.[String(c.n)];
-  const next=typeof raw==='string'?raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];
+  const next=inventoryLines(raw);
   if(next.length!==c.items.length||next.some((line,i)=>line!==c.items[i]))c.items=next;
   if(c.items.length){occupied++;lines+=c.items.length;}
  }
@@ -180,6 +188,11 @@ function articlePopupPosition(anchor,width,height,w,h,obstacles){
  [x+r+gap,y+b+gap],[x-r-width-gap,y+b+gap],
  [x+r+gap,y-b-height-gap],[x-r-width-gap,y-b-height-gap]
  ];
+ // If the eight nearby positions are blocked, try the edges of every
+ // obstacle. This finds free space elsewhere without covering controls.
+ const xs=[pad,w-width-pad,x-width/2],ys=[pad,h-height-pad,y-height/2];
+ for(const o of obstacles){xs.push(o.left-width-gap,o.right+gap);ys.push(o.top-height-gap,o.bottom+gap);}
+ for(const cx of xs)for(const cy of ys)candidates.push([cx,cy]);
  const seen=new Set(),valid=[];
  for(const [cx,cy] of candidates){
   const left=clamp(cx,pad,w-width-pad),top=clamp(cy,pad,h-height-pad);
@@ -204,5 +217,5 @@ function linkedCellMatches(link,ready){
  return ready&&link.article?exactArticleMatches(link.article):link.addresses;
 }
 function routeDistance(path){return path.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-path[i].x,p.z-path[i].z),0);}
-const layout={routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
