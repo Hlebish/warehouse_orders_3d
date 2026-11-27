@@ -33,5 +33,43 @@ function navigation(streets){
  }
  return {points,route};
 }
-const layout={cells,racks,streets,search,normalizeAddress,...navigation(streets)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function occlusion(cells,racks){
+ const key=c=>c.street+':'+c.side+':'+(c.n<=3?'1-3':'4-10');
+ const sections=racks.flatMap(r=>[[1,3],[4,10]].map(([first,last])=>{
+  const members=cells.filter(c=>c.street===r.street&&c.side===r.side&&c.n>=first&&c.n<=last);
+  const zMin=Math.min(...members.map(c=>c.z))-.83,zMax=Math.max(...members.map(c=>c.z))+.83;
+  return {id:key(members[0]),members,x:r.x,z:(zMin+zMax)/2,w:1.46,h:4.6,d:zMax-zMin};
+ }));
+ function hit(eye,target,center,half){
+  let lo=0,hi=1;
+  for(let i=0;i<3;i++){
+   const d=target[i]-eye[i],min=center[i]-half[i],max=center[i]+half[i];
+   if(Math.abs(d)<1e-9){if(eye[i]<min||eye[i]>max)return null;continue;}
+   let t1=(min-eye[i])/d,t2=(max-eye[i])/d;
+   lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));
+   if(lo>hi)return null;
+  }return lo;
+ }
+ function blockers(eye,cell){
+  if(!cell)return [];
+  const center=[cell.x,cell.y,cell.z],half=[cell.w/2,cell.h/2,cell.d/2];
+  const samples=[center,...[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>[center[0]+x*half[0]*.77,center[1]+y*half[1]*.77,center[2]+z*half[2]*.77])))];
+  const own=key(cell);
+  return sections.filter(s=>samples.some(target=>{
+   const entry=hit(eye,target,center,half);
+   if(entry===null)return false;
+   if(s.id!==own){
+    const t=hit(eye,target,[s.x,s.h/2,s.z],[s.w/2,s.h/2,s.d/2]);
+    return t!==null&&t<entry-1e-5;
+   }
+   return s.members.some(c=>{
+    if(c.id===cell.id)return false;
+    const t=hit(eye,target,[c.x,c.y,c.z],[c.w/2,c.h/2,c.d/2]);
+    return t!==null&&t<entry-1e-5;
+   });
+  })).map(s=>s.id);
+ }
+ return {key,sections,blockers};
+}
+const layout={cells,racks,streets,search,normalizeAddress,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
