@@ -135,3 +135,5 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 #edit-panel button{min-height:30px;padding:4px 5px;font-size:11px;white-space:normal;line-height:1.2}
 #edit-panel button:disabled{opacity:.35;cursor:default}
 @media(max-height:450px){#edit-panel{max-height:65%;width:min(220px,46%);padding:5px;gap:3px}#edit-panel button{min-height:25px;font-size:10px}}
+
+#edit-piston{border-color:#398591;background:#204452}#edit-reset{grid-column:1/-1}

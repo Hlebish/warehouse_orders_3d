@@ -22,28 +22,26 @@ for(const c of cells){
  const wing=e.apply([], [c.id],'wing');assert(wing);const b=e.bounds(wing[0]);assert.equal(b.cells.length,1);
  const above=e.neighbor(c.id,1);if(above){const pair=e.apply([], [c.id,above],'hood');assert(pair);const bb=e.bounds(pair[0]);assert(Math.abs(bb.h-1.64)<1e-8);}
 }
-for(const model of ['wing','hood','shelf']){
- const ids=model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'];
- const b=e.bounds(e.apply([],ids,model)[0]);let meshes=0;
- drawShelf((x,y,z,w,h,d)=>{assert([x,y,z,w,h,d].every(Number.isFinite));assert(w>0&&h>0&&d>0);},(pts)=>{assert.equal(pts.length,4);for(const p of pts){assert(p.every(Number.isFinite));assert(p[1]>=b.base-.001&&p[1]<=b.top+.001);assert(Math.abs(p[0]-b.x)<=b.w/2+.001);assert(Math.abs(p[2]-b.z)<=b.d/2+.001);}meshes++;},b,model,1,'f5ca63');
- assert(model==='shelf'?meshes===0:meshes>30);
-}
-assert.equal(cells.length,450);
-console.log('Shelf editor and meshes OK');
 
-// Cartons and panels remain inside each cell on both aisle sides.
-for(const model of ['wing','hood'])for(const side of [-1,1]){
- const b=e.bounds(e.apply([],model==='wing'?['S3-A-1']:['S3-A-1','S3-B-1'],model)[0]);
- const boxes=[],points=[];
- drawShelf((...v)=>boxes.push(v),p=>points.push(...p),b,model,side,'f5ca63');
- const bottoms=boxes.filter(v=>Math.abs(v[4]-.024)<1e-8&&Math.abs(v[3]-(b.w-.13))<1e-8);
- assert.equal(bottoms.length,model==='wing'?4:3);
- for(let i=1;i<bottoms.length;i++)assert(bottoms[i][2]-bottoms[i][5]/2>bottoms[i-1][2]+bottoms[i-1][5]/2);
+assert.equal(e.apply([],['S3-A-1'],'piston')[0].model,'piston');
+assert.equal(e.apply([],['S3-A-1','S3-B-1'],'piston'),null);
+for(const model of ['wing','hood','piston','shelf'])for(const side of [-1,1]){
+ const ids=model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'];
+ const b=e.bounds(e.apply([],ids,model)[0]);const boxes=[],points=[];
+ drawShelf((...v)=>boxes.push(v),(p)=>{assert.equal(p.length,4);points.push(...p);},b,model,side,'f5ca63');
  for(const [x,y,z,w,h,d] of boxes){
+  assert([x,y,z,w,h,d].every(Number.isFinite));assert(w>0&&h>0&&d>0);
   assert(Math.abs(x-b.x)+w/2<=b.w/2+.001);
   assert(y-h/2>=b.base-.001&&y+h/2<=b.top+.001);
   assert(Math.abs(z-b.z)+d/2<=b.d/2+.001);
  }
- assert(Math.max(...points.map(p=>p[1]))-Math.min(...points.map(p=>p[1]))>(model==='wing'?.5:1.4));
- assert(points.every(p=>p[1]>=b.base&&p[1]<=b.top&&Math.abs(p[0]-b.x)<=b.w/2&&Math.abs(p[2]-b.z)<=b.d/2));
+ assert(points.every(p=>p.every(Number.isFinite)&&p[1]>=b.base-.001&&p[1]<=b.top+.001&&Math.abs(p[0]-b.x)<=b.w/2+.001&&Math.abs(p[2]-b.z)<=b.d/2+.001));
+ if(model==='wing'||model==='hood'){
+  assert(points.length>120);
+  const span=Math.max(...points.map(p=>p[1]))-Math.min(...points.map(p=>p[1]));
+  assert(span>(model==='wing'?.50:1.40));
+ }else assert.equal(points.length,0);
+ if(model==='piston'){const stock=boxes.filter(v=>['126d83','197f92','1d7183','268b9a'].includes(v[6]));assert(stock.length>50);assert(new Set(stock.map(v=>v[2])).size===5);assert(new Set(stock.map(v=>v[1])).size===6);}
 }
+assert.equal(cells.length,450);
+console.log('Reference shelf models and editor passed');

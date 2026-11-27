@@ -35,6 +35,7 @@ function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(ya
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function box(x,y,z,w,h,d,hex){const a=w/2,b=h/2,e=d/2;const v=[[-a,-b,-e],[a,-b,-e],[a,b,-e],[-a,b,-e],[-a,-b,e],[a,-b,e],[a,b,e],[-a,b,e]].map(p=>add(p,[x,y,z]));const color=rgb(hex);for(const [ids,shade] of [[[0,1,2,3],.7],[[4,5,6,7],.93],[[0,4,7,3],.76],[[1,5,6,2],.84],[[3,2,6,7],1.15],[[0,1,5,4],.55]]){let c=color.map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...v[ids[i]],...c);}}
 function meshQuad(points,hex,shade=1){const color=rgb(hex).map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...points[i],...color);}
+function rackBrace(x1,y1,x2,y2,z){const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy),nx=-dy/len*.018,ny=dx/len*.018,t=.022;const p=[[x1+nx,y1+ny,z-t],[x2+nx,y2+ny,z-t],[x2-nx,y2-ny,z-t],[x1-nx,y1-ny,z-t]],q=p.map(v=>[v[0],v[1],v[2]+2*t]);meshQuad(p,'83949f',.85);meshQuad(q,'a9b6bf',1);for(let i=0;i<4;i++)meshQuad([p[i],p[(i+1)%4],q[(i+1)%4],q[i]],'82919b',.9);}
 // Orientation landmarks only: approximate geometry, no extra stock cells.
 function buildLandmarks(){
  // Open north end: show adjoining warehouse floor continuing beyond our racks.
@@ -78,16 +79,17 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
   const bays=s.members.filter(c=>c.letter===s.members[0].letter);
   const lowerByBay=new Map(bays.map(c=>[c.n,s.members.filter(v=>v.n===c.n).sort((a,b)=>a.y-b.y)]));
   for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
-   for(const zz of [s.z-d/2,s.z+d/2])box(xx,2.3,zz,.085,4.6,.085,'bc9158');
+   for(const zz of [s.z-d/2,s.z+d/2])box(xx,2.3,zz,.085,4.6,.085,'9eabb4');
   }
+  for(const zz of [s.z-d/2,s.z+d/2])for(let i=0;i<5;i++){const a=s.x-RACK_WIDTH/2+.05,b=s.x+RACK_WIDTH/2-.05; rackBrace(i%2?a:b,.19+i*.88,i%2?b:a,.91+i*.88,zz);}
   for(const q of bays){
    const stack=lowerByBay.get(q.n);
    for(let i=0;i<=5;i++){
     const lower=stack[i-1],upper=stack[i];
     const group=lower&&shelfIndex.get(lower.id);
     if(group&&upper&&group.ids.includes(upper.id))continue;
-    for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425])box(xx,.12+i*.88,q.z,.08,.085,1.64,'bc9158');
-    box(s.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'77664e');
+    for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425])box(xx,.12+i*.88,q.z,.08,.085,1.64,'b5262d');
+    box(s.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'8f734f');
    }
   }
   for(const c of s.members){
@@ -203,16 +205,17 @@ function updateShelfEditor(){
  if(!editing)return;
  const entry=editIds.length?shelfIndex.get(editIds[0]):null;
  $('edit-address').textContent=editIds.length?editIds.join(' + '):'Выберите ячейку';
- $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты'}[entry.model]):'Обычная ячейка';
+ $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты',piston:'Поршни'}[entry.model]):'Обычная ячейка';
  $('edit-current').hidden=!editIds.length;
  $('edit-upper').disabled=!shelfEditor.extend(shelfDesign,editIds,1);
  $('edit-lower').disabled=!shelfEditor.extend(shelfDesign,editIds,-1);
  $('edit-shelf').disabled=!editIds.length;
  $('edit-wing').disabled=editIds.length!==1;
+ $('edit-piston').disabled=editIds.length!==1;
  $('edit-hood').disabled=editIds.length!==2;
  $('edit-reset').disabled=!editIds.some(id=>shelfIndex.has(id));
  $('edit-focus').disabled=!editIds.length;
- $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1?'Крылья: 1 уровень. Для капотов добавьте соседний уровень.':'Два уровня: полка или капоты. Адреса сохраняются.';
+ $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1?'Крылья и поршни: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
 }
 function setEditSelection(ids){
  editIds=ids.slice();selected=cells.find(c=>c.id===editIds[0])||null;
@@ -240,7 +243,7 @@ function toggleEditor(){
 $('edit-mode').onclick=toggleEditor;
 $('edit-upper').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,1);if(ids)setEditSelection(ids);};
 $('edit-lower').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,-1);if(ids)setEditSelection(ids);};
-for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
+for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
 $('edit-focus').onclick=()=>{if(!selected)return;const pose=cellFocusPose(selected);if(!pose)return;const group=editIds.map(id=>cells.find(c=>c.id===id));if(group.length===2){pose.target=[...pose.target];pose.target[1]=(group[0].y+group[1].y)/2;pose.distance=Math.max(pose.distance,3.6);}stopFlight();move(pose,450);};
 
 function select(c){clearRoute(false);selected=c;if(linkedOrder&&!manualOrigin)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}
