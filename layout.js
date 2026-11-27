@@ -144,5 +144,12 @@ function mapLinkQuery(query){
  return {article,addresses};
 }
 
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function orderStreetStart(cell,points,route,streets){
+ const origin=cell&&points.find(p=>p.id===cell.street);
+ if(!origin)return null;
+ const plan=walkingPlan(origin,cell,route,streets);
+ return plan.length?{origin,pose:plan[0].pose}:null;
+}
+
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

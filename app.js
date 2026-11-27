@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -97,13 +97,22 @@ function overview(top=false){stopFlight();walkView=false;move({target:[0,0,-.5],
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
 let inventoryReady=false,lastQuery='',linkedOrder=null;
 function linkedHits(){return linkedOrder.addresses.length?linkedOrder.addresses:exactArticleMatches(linkedOrder.article);}
+function focusOrderStreet(cell){
+ const start=orderStreetStart(cell,points,route,streets);
+ if(!start)return;
+ stopFlight();origin=start.origin;walkView=true;
+ const p=start.pose;
+ // Start exactly above the selected street's navigation point, not the warehouse center.
+ Object.assign(cam,{target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance});
+ basis=camera();dirty=true;
+}
 function renderCellDetail(){
  if(!selected)return;
  $('result-expand').textContent=(inventoryReady?'Товары · '+selected.items.length:'Товары')+($('result-detail').hidden?' ▾':' ▴');
  $('address').textContent=selected.id;
  $('detail').textContent=!inventoryReady?'Содержимое ячейки будет доступно после подключения к Warehouse Map.':selected.items.length?selected.items.join('\n'):'Ячейка пустая.';
 }
-function select(c){clearRoute(false);if(!selected){$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');}selected=c;renderCellDetail();build();drawMini();updateActions();}
+function select(c){clearRoute(false);if(!selected){$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');}selected=c;if(linkedOrder)focusOrderStreet(c);renderCellDetail();build();drawMini();updateActions();}
 function renderMatches(){const result=$('results');result.replaceChildren();result.hidden=hits.length<2;
  for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id+(inventoryReady?' · '+c.items.length+' поз.':'');b.onclick=()=>select(c);result.append(b);}
 }
@@ -112,7 +121,7 @@ function refreshInventory(data,ready){
  $('stock-badge').textContent=ready?stats.occupied+' / '+stats.total+' занято':'450 ячеек';
  if(lastQuery){
   hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
-  if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;}
+  if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;if(linkedOrder&&selected)focusOrderStreet(selected);}
   if(!selected){$('address').textContent='Не найдено';$('detail').textContent=ready?'Совпадений нет.': 'Войдите в Warehouse Map для поиска товаров.';}
   $('message').textContent=ready?'Найдено: '+hits.length: 'Для поиска товара необходимо подключение.';
  }
@@ -130,6 +139,8 @@ function flyRoute(){
  if(!hasStreetOrigin()){$('route-caption').textContent='Сначала выберите свою улицу S1–S5';$('route-origin').focus();return;}
  stopFlight();const plan=walkingPlan(origin,selected,route,streets);if(!plan.length)return;
  routePath=route(origin,selected);walking=true;walkView=false;flight=plan;
+ const first=flight[0].pose,eye=camera().eye;
+ if(Math.hypot(...eye.map((v,i)=>v-first.eye[i]))<.01&&Math.abs(wrapAngle(cam.yaw-first.yaw))<.01&&Math.abs(cam.pitch-first.pitch)<.01){flight.shift();walkView=true;}
  build();drawMini();updateActions();startWalkStep(flight.shift());
  $('message').textContent='Маршрут: '+origin.name+' → '+selected.id;
 }
@@ -253,7 +264,7 @@ const incoming=mapLinkQuery(location.search);
 if(incoming.addresses.length||incoming.article){
  linkedOrder=incoming;lastQuery=incoming.article||incoming.addresses[0].id;$('search').value=lastQuery;
  hits=linkedHits();renderMatches();
- if(hits.length){selected=hits[0];renderCellDetail();$('message').textContent='Из заказа · '+hits.length+' адрес(а)';}
+ if(hits.length){selected=hits[0];focusOrderStreet(selected);renderCellDetail();$('message').textContent='Из заказа · '+hits.length+' адрес(а)';}
  else{$('address').textContent='Поиск позиции заказа';$('detail').textContent='После подключения к Warehouse Map проверим точный артикул.';}
 }
 build();drawMini();updateActions();requestAnimationFrame(frame);
