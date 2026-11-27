@@ -97,7 +97,7 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
    if(!entry){box(c.x,c.y,c.z,c.w,c.h,c.d,tone(c));continue;}
    if(entry.ids[0]!==c.id)continue;
    const b=shelfEditor.bounds(entry),aisle=streets.find(v=>v.id===c.street),side=Math.sign(aisle.x-c.x);
-   // Shelf design is not inventory. Empty assigned shelves show only their pallet.
+   // Body panels follow occupancy; piston models are permanent landmarks.
    const occupied=inventoryReady&&b.cells.some(v=>v.items.length>0);
    WarehouseShelves.drawShelf(box,meshQuad,b,entry.model,side,'53677a',editing||occupied);
    // Individual address markers, never a green group-wide indicator.

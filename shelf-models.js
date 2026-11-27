@@ -163,8 +163,9 @@ function drawShelf(box,quad,b,model,side,accent,showStock=true){
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
  if(model==='shelf')return;
  const base=pallet(box,b);
- if(!showStock)return;
+ // Pistons are stored outside the address inventory: always show their assigned model.
  if(model==='piston'){pistonStock(box,b,base,side);return;}
+ if(!showStock)return;
  for(const pack of packingPlan(b,model)){
   if(model==='wing')wingPack(quad,b,base,side,pack);else hoodPack(quad,b,base,side,pack);
  }

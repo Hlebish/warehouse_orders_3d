@@ -50,7 +50,14 @@ for(const model of ['wing','hood','piston']){
  const b=e.bounds(e.apply([],model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'],model)[0]);
  let boxes=[],quads=0;
  drawShelf((...v)=>boxes.push(v),()=>quads++,b,model,1,'53677a',false);
- assert.equal(quads,0);assert.equal(boxes.length,9);assert(!boxes.some(v=>['126d83','197f92','1d7183','268b9a','6bb58b'].includes(v[6])));
+ assert.equal(quads,0);
+ const stock=boxes.filter(v=>['126d83','197f92','1d7183','268b9a'].includes(v[6]));
+ if(model==='piston'){
+  assert(stock.length>50);
+  const full=[];drawShelf((...v)=>full.push(v),()=>{},b,model,1,'53677a',true);
+  assert.deepEqual(boxes,full);
+ }else{assert.equal(boxes.length,9);assert.equal(stock.length,0);}
+ assert(!boxes.some(v=>v[6]==='6bb58b'));
 }
 
 const {packingPlan}=require('./shelf-models.js');
@@ -78,3 +85,13 @@ for(const c of cells)for(const model of ['wing','hood']){
 }
 assert(layouts.wing.size>12);assert(layouts.hood.size>6);
 assert.deepEqual(packingPlan(e.bounds(e.apply([],['S3-A-1'],'piston')[0]),'piston'),[]);
+
+// Empty piston landmarks must not imply an occupied address; other models remain conditional.
+const {applyInventory,cellTone}=require('./layout.js');
+applyInventory(null);
+const pc=cells.find(c=>c.id==='S3-A-1');assert.equal(pc.items.length,0);assert.equal(cellTone(pc,true,false,false),'53677a');
+for(const model of ['wing','hood','piston']){
+ const b=e.bounds(e.apply([],model==='hood'?['S3-A-1','S3-B-1']:['S3-A-1'],model)[0]);
+ const mesh=flag=>{let boxes=0,quads=0;drawShelf(()=>boxes++,()=>quads++,b,model,1,'53677a',flag);return {boxes,quads};};
+ if(model==='piston')assert.deepEqual(mesh(false),mesh(true));else{assert.equal(mesh(false).quads,0);assert(mesh(true).quads>0);}
+}
