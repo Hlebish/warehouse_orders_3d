@@ -159,18 +159,22 @@ function pan(dx,dy){
 // A gesture keeps its type until the fingers are lifted.
 function pairMetrics(p){
  const x=p[1].x-p[0].x,y=p[1].y-p[0].y;
- return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y)};
+ return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y),angle:Math.atan2(y,x)};
 }
 function classifyPair(base,next){
  const x0=next[0].x-base[0].x,y0=next[0].y-base[0].y,x1=next[1].x-base[1].x,y1=next[1].y-base[1].y;
  const m0=Math.hypot(x0,y0),m1=Math.hypot(x1,y1);
  const common=Math.hypot(x0+x1,y0+y1)/2;
- const radial=Math.abs(pairMetrics(next).length-pairMetrics(base).length)/2;
+ const before=pairMetrics(base),after=pairMetrics(next);
+ const radial=Math.abs(after.length-before.length)/2;
+ const twist=Math.abs(wrapAngle(after.angle-before.angle));
+ const tangential=twist*Math.min(before.length,after.length)/2;
  const relative=Math.hypot(x1-x0,y1-y0)/2;
  if(Math.max(m0,m1)<5)return null;
  if(Math.min(m0,m1)<2&&Math.max(m0,m1)<18)return null;
  if(common>=4&&common>=relative*1.15)return 'pan';
- if(radial>=4&&radial>=common*.8)return 'pinch';
+ if(before.length>12&&after.length>12&&twist>=.075&&tangential>=4&&tangential>=radial*1.25&&tangential>=common*.8)return 'twist';
+ if(radial>=4&&radial>=common*.8&&radial>=tangential*1.15)return 'pinch';
  return null;
 }
 function planeOffset(state,point,width,height){
@@ -198,7 +202,8 @@ function flushGesture(){
  }
  stopFlight();
  if(gestureKind==='pan')pan(now.center.x-prev.center.x,now.center.y-prev.center.y);
- else if(prev.length>8&&now.length>8)pinchAt(cam,pinchCenter,canvas.clientWidth,canvas.clientHeight,prev.length/now.length);
+ else if(gestureKind==='pinch'&&prev.length>8&&now.length>8)pinchAt(cam,pinchCenter,canvas.clientWidth,canvas.clientHeight,prev.length/now.length);
+ else if(gestureKind==='twist'&&prev.length>12&&now.length>12)cam.yaw=wrapAngle(cam.yaw+wrapAngle(now.angle-prev.angle));
  previousPair=next;dirty=true;
 }
 canvas.addEventListener('pointerdown',e=>{
