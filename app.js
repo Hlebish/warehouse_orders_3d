@@ -75,8 +75,33 @@ function choosePoint(p){clearRoute(false);origin=p;build();drawMini();updateActi
 $('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('example').onclick=()=>{$('search').value='S3, K7';runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
+// Drag on the horizontal warehouse plane. Pixel scale follows camera zoom.
+function pan(dx,dy){
+ const scale=2*cam.distance*Math.tan(Math.PI/8)/Math.max(1,canvas.clientHeight);
+ const right=[Math.cos(cam.yaw),0,-Math.sin(cam.yaw)];
+ const forward=[-Math.sin(cam.yaw),0,-Math.cos(cam.yaw)];
+ cam.target=add(cam.target,add(mul(right,-dx*scale),mul(forward,dy*scale/Math.max(.35,Math.sin(cam.pitch)))));
+ dirty=true;
+}
 const pointers=new Map();let start=null,moved=false;canvas.addEventListener('pointerdown',e=>{stopFlight();canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;}else moved=true;});
-canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;let old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const other=[...pointers.entries()].find(([id])=>id!==e.pointerId)[1];const prev=Math.hypot(old.x-other.x,old.y-other.y),now=Math.hypot(e.clientX-other.x,e.clientY-other.y);if(now>5&&prev>5)zoom(prev/now);moved=true;}else if(start){if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;if(moved){if(start.button===2||e.shiftKey){const b=camera();cam.target=add(cam.target,add(mul(b.right,-dx*cam.distance*.0018),mul([b.forward[0],0,b.forward[2]],-dy*cam.distance*.0025)));}else{cam.yaw-=dx*.007;cam.pitch=clamp(cam.pitch+dy*.006,.09,1.54);}dirty=true;}}});
-canvas.addEventListener('pointerup',e=>{if(pointers.size===1&&!moved&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);pointers.delete(e.pointerId);if(!pointers.size)start=null;});canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);moved=true;if(!pointers.size)start=null;});canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
+canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;let old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){
+ const other=[...pointers.entries()].find(([id])=>id!==e.pointerId)[1];
+ const prev=Math.hypot(old.x-other.x,old.y-other.y),now=Math.hypot(e.clientX-other.x,e.clientY-other.y);
+ // The midpoint controls translation; distance between fingers controls zoom.
+ pan(dx/2,dy/2);
+ if(now>5&&prev>5)zoom(prev/now);
+ moved=true;
+}else if(pointers.size===1&&start){if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;if(moved){if(start.button===2||e.shiftKey){pan(dx,dy);}else{cam.yaw-=dx*.007;cam.pitch=clamp(cam.pitch+dy*.006,.09,1.54);}dirty=true;}}});
+function finishPointer(e,cancel=false){
+ if(!pointers.has(e.pointerId))return;
+ if(!cancel&&pointers.size===1&&!moved&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
+ pointers.delete(e.pointerId);
+ if(pointers.size===1){const p=pointers.values().next().value;start={x:p.x,y:p.y,button:0};moved=true;}
+ else if(!pointers.size){start=null;moved=false;}
+ else moved=true;
+}
+canvas.addEventListener('pointerup',e=>finishPointer(e));
+canvas.addEventListener('pointercancel',e=>finishPointer(e,true));
+canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
 cam.distance=canvas.clientWidth/canvas.clientHeight<1.15?60:47;build();drawMini();updateActions();requestAnimationFrame(frame);
 })();
