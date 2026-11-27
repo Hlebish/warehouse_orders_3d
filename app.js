@@ -13,6 +13,7 @@ let selected=null, hits=[], vertices=[], count=0, dirty=true, animation=null, fl
 const mul=(a,k)=>a.map(x=>x*k),add=(a,b)=>a.map((x,i)=>x+b[i]),sub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),norm=a=>mul(a,1/Math.hypot(...a)),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const cam={target:[0,0,0],yaw:.24,pitch:.78,distance:47};
+const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
 let basis;
 function camera(){const {target,yaw,pitch,distance}=cam;const eye=add(target,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]),forward=norm(sub(target,eye)),right=norm(cross(forward,[0,1,0])),up=cross(right,forward);return {eye,forward,right,up,aspect:canvas.width/canvas.height,zoom:1/Math.tan(Math.PI/8)};}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
@@ -46,9 +47,9 @@ function tag(text,point){const el=document.createElement(point?'button':'span');
 function project(pos){let v=sub(pos,basis.eye),d=dot(v,basis.forward);if(d<.3)return null;let x=dot(v,basis.right)*basis.zoom/(basis.aspect*d),y=dot(v,basis.up)*basis.zoom/d;return [(x+1)*canvas.clientWidth/2,(1-y)*canvas.clientHeight/2];}
 function place(el,p){const xy=project(p);el.hidden=!xy||xy[0]<0||xy[1]<0||xy[0]>canvas.clientWidth||xy[1]>canvas.clientHeight;if(!el.hidden){el.style.left=xy[0]+'px';el.style.top=xy[1]+'px';}}
 function drawCanvas(w,h){ctx.fillStyle='#1b2633';ctx.fillRect(0,0,w,h);const faces=[],geometry=vertices.concat(ghostVertices);for(let i=0;i<geometry.length;i+=36){let pts=[],depth=0,valid=true;for(const j of [0,6,12,30]){let v=sub(geometry.slice(i+j,i+j+3),basis.eye),d=dot(v,basis.forward);if(d<.2){valid=false;break;}depth+=d;pts.push([(1+dot(v,basis.right)*basis.zoom/(basis.aspect*d))*w/2,(1-dot(v,basis.up)*basis.zoom/d)*h/2]);}if(valid){const area=(pts[1][0]-pts[0][0])*(pts[2][1]-pts[0][1])-(pts[1][1]-pts[0][1])*(pts[2][0]-pts[0][0]);if(Math.abs(area)>.03)faces.push({pts,depth,ground:i<groundCount,order:i,color:geometry.slice(i+3,i+6),ghost:i>=vertices.length});}}faces.sort((a,b)=>a.ground!==b.ground?(a.ground?-1:1):a.ground?a.order-b.order:b.depth-a.depth);for(const f of faces){ctx.beginPath();f.pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle='rgb('+f.color.map(n=>Math.round(n*255)).join(',')+')';ctx.globalAlpha=f.ghost?.13:1;ctx.fill();}ctx.globalAlpha=1;}
-function frame(t){requestAnimationFrame(frame);if(animation){let u=clamp((t-animation.start)/animation.duration,0,1),k=1-Math.pow(1-u,3);cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);for(let key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animation.to[key]-animation.from[key])*k;if(u>=1){animation=null;if(flight.length){const next=flight.shift();move(next.to,next.duration);}else if(routePath.length)$('message').textContent='Маршрут построен. Ячейка '+(selected?.id||'')+' подсвечена.';}dirty=true;}
+function frame(t){requestAnimationFrame(frame);flushGesture();if(animation){let u=clamp((t-animation.start)/animation.duration,0,1),k=1-Math.pow(1-u,3);cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);for(let key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animation.to[key]-animation.from[key])*k;if(u>=1){animation=null;if(flight.length){const next=flight.shift();move(next.to,next.duration);}else if(routePath.length)$('message').textContent='Маршрут построен. Ячейка '+(selected?.id||'')+' подсвечена.';}dirty=true;}
  const ratio=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();refreshOcclusion();dirty=false;if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.uniform1f(uniforms.opacity,1);gl.drawArrays(gl.TRIANGLES,0,count);if(ghostCount){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);gl.uniform1f(uniforms.opacity,.13);gl.drawArrays(gl.TRIANGLES,count,ghostCount);gl.depthMask(true);gl.disable(gl.BLEND);}}else drawCanvas(w,h);for(const m of markers)place(m.el,m.pos);if(selected){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';}else selectionTag.hidden=true;updateCameraDot();}
-function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to}};}
+function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){flight=[];animation=null;}
 function overview(top=false){stopFlight();move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?1.54:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
@@ -105,19 +106,56 @@ function pan(dx,dy){
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
-const pointers=new Map();let start=null,moved=false;canvas.addEventListener('pointerdown',e=>{stopFlight();canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;}else moved=true;});
-canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;let old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){
- const other=[...pointers.entries()].find(([id])=>id!==e.pointerId)[1];
- const prev=Math.hypot(old.x-other.x,old.y-other.y),now=Math.hypot(e.clientX-other.x,e.clientY-other.y);
- // The midpoint controls translation; distance between fingers controls zoom.
- pan(dx/2,dy/2);
- if(now>5&&prev>5)zoom(prev/now);
- moved=true;
-}else if(pointers.size===1&&start){if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;if(moved){if(start.button===2||e.shiftKey){pan(dx,dy);}else{cam.yaw-=dx*.007;cam.pitch=clamp(cam.pitch+dy*.006,.09,1.54);}dirty=true;}}});
+function gestureDelta(prev,next){
+ const dx=(next[0].x+next[1].x-prev[0].x-prev[1].x)/2,dy=(next[0].y+next[1].y-prev[0].y-prev[1].y)/2;
+ const ax=prev[1].x-prev[0].x,ay=prev[1].y-prev[0].y,bx=next[1].x-next[0].x,by=next[1].y-next[0].y;
+ const before=Math.hypot(ax,ay),after=Math.hypot(bx,by);
+ return {dx,dy,zoom:before>8&&after>8?before/after:1,twist:before>8&&after>8?Math.atan2(ax*by-ay*bx,ax*bx+ay*by):0};
+}
+const pointers=new Map();let start=null,moved=false,previousPair=null,pairDirty=false,orbitMode=false;
+const pair=()=>[...pointers.values()].map(p=>({...p}));
+function resetPair(){previousPair=pointers.size===2?pair():null;pairDirty=false;}
+function flushGesture(){
+ if(!pairDirty||pointers.size!==2||!previousPair)return;
+ const next=pair(),g=gestureDelta(previousPair,next);previousPair=next;pairDirty=false;
+ stopFlight();
+ cam.distance=clamp(cam.distance*g.zoom,2.8,100);
+ if(orbitMode){
+  cam.yaw=wrapAngle(cam.yaw-g.dx*.007-g.twist);
+  cam.pitch=clamp(cam.pitch+g.dy*.006,.09,1.54);
+ }else{
+  pan(g.dx,g.dy);
+  cam.yaw=wrapAngle(cam.yaw-g.twist);
+ }
+ dirty=true;
+}
+$('gesture-mode').onclick=()=>{
+ flushGesture();orbitMode=!orbitMode;resetPair();
+ $('gesture-mode').textContent=orbitMode?'2 пальца: поворот':'2 пальца: сдвиг';
+ $('gesture-mode').setAttribute('aria-pressed',String(orbitMode));
+ $('hint').textContent=orbitMode?'2 пальца — поворот и наклон · щипок — зум':'2 пальца — сдвиг, скручивание — поворот, щипок — зум';
+};
+canvas.addEventListener('pointerdown',e=>{
+ flushGesture();stopFlight();canvas.setPointerCapture(e.pointerId);
+ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;}else moved=true;
+ resetPair();
+});
+canvas.addEventListener('pointermove',e=>{
+ if(!pointers.has(e.pointerId))return;
+ const old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;
+ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pointers.size===2){pairDirty=true;moved=true;}
+ else if(pointers.size===1&&start){
+  if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;
+  if(moved){if(start.button===2||e.shiftKey)pan(dx,dy);else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.09,1.54);}dirty=true;}
+ }
+});
 function finishPointer(e,cancel=false){
  if(!pointers.has(e.pointerId))return;
+ flushGesture();
  if(!cancel&&pointers.size===1&&!moved&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
- pointers.delete(e.pointerId);
+ pointers.delete(e.pointerId);resetPair();
  if(pointers.size===1){const p=pointers.values().next().value;start={x:p.x,y:p.y,button:0};moved=true;}
  else if(!pointers.size){start=null;moved=false;}
  else moved=true;
