@@ -47,3 +47,17 @@ assert.deepEqual(exactArticleMatches('КН3755 280').map(c=>c.id),['S1-A-5']);
 const sameCell=search('S1-A-2')[0],sameItems=sameCell.items;
 applyInventory({S1:{A:{2:'APBM2802 — Крыло'}}});assert.equal(sameCell.items,sameItems);
 applyInventory(null);assert.equal(sameCell.items.length,0);
+
+const {cellFocusPose,linkedCellMatches}=require('./layout.js');
+for(const c of cells){
+ const p=cellFocusPose(c),s=streets.find(s=>s.id===c.street);
+ const eye=[p.target[0]+p.distance*Math.sin(p.yaw)*Math.cos(p.pitch),p.target[1]+p.distance*Math.sin(p.pitch),p.target[2]+p.distance*Math.cos(p.yaw)*Math.cos(p.pitch)];
+ assert(Math.abs(eye[0]-s.x)<1e-8);assert(Math.abs(eye[1]-c.y-.28)<1e-8);assert(Math.abs(eye[2]-c.z)<1e-8);assert.deepEqual(p.target,[c.x,c.y,c.z]);
+}
+const stale=mapLinkQuery('?article=APBM2802&cell=S3-K-7');
+assert.deepEqual(linkedCellMatches(stale,false).map(c=>c.id),['S3-K-7']);
+assert.deepEqual(linkedCellMatches(stale,true),[]);
+applyInventory({S2:{A:{2:'APBM2802 — Крыло'}}});
+assert.deepEqual(linkedCellMatches(stale,true).map(c=>c.id),['S2-A-2']);
+assert.deepEqual(linkedCellMatches(mapLinkQuery('?cell=S3-K-7'),true).map(c=>c.id),['S3-K-7']);
+applyInventory(null);

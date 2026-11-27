@@ -186,5 +186,16 @@ function articlePopupPosition(anchor,width,height,w,h,obstacles){
  return valid.length?{left:valid[0].left,top:valid[0].top}:null;
 }
 
-const layout={articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+// Look at the aisle-facing side of the cell, without changing route origin.
+function cellFocusPose(cell){
+ const aisle=cell&&streets.find(s=>s.id===cell.street);if(!aisle)return null;
+ const eye=[aisle.x,cell.y+.28,cell.z],target=[cell.x,cell.y,cell.z];
+ const dx=eye[0]-target[0],dy=eye[1]-target[1],dz=eye[2]-target[2];
+ return {target,yaw:Math.atan2(dx,dz),pitch:Math.atan2(dy,Math.hypot(dx,dz)),distance:Math.hypot(dx,dy,dz)};
+}
+function linkedCellMatches(link,ready){
+ if(!link)return [];
+ return ready&&link.article?exactArticleMatches(link.article):link.addresses;
+}
+const layout={cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

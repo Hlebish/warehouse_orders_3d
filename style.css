@@ -108,3 +108,13 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 .cell-article-popup{width:max-content;max-width:112px;transform:none;padding:2px 4px;border-radius:4px;font:500 10px/14px system-ui,sans-serif;background:#142330f2;box-shadow:0 2px 5px #0004;z-index:1}.cell-article-popup>div{height:14px;line-height:14px}.scene-pin{z-index:3}.tag.active{z-index:3}
 
 #stage>#error{inset:auto 12px 50% 12px;transform:translateY(50%);z-index:8;margin:auto;max-width:340px;text-align:center;padding:12px 15px;border:1px solid #6b8395;box-shadow:0 4px 18px #0006;font-size:13px;pointer-events:none}
+
+/* Keep address selection and target focus compact and out of the map layout. */
+#stage>#result-panel{width:max-content;max-width:min(240px,calc(100% - 16px))}
+#stage>#result-panel #results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:104px;overflow-y:auto;overflow-x:hidden}
+#stage>#result-panel #results[hidden]{display:none!important}
+#results button[aria-pressed=true]{border-color:#f5ca63;background:#574d35;color:#fff0bf}
+#toggle-results{font-size:11px;min-height:25px;padding:3px 7px;white-space:nowrap}
+.route-caption-row{display:flex;align-items:center;justify-content:space-between;gap:4px;min-width:0}
+.route-caption-row #route-caption{flex:1;min-width:0;overflow-wrap:anywhere}
+#focus-cell{min-height:25px;font-size:10px;padding:3px 6px;flex:0 0 auto;border-color:#a58f58;color:#f5d78e;background:#263548}
