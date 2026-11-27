@@ -15,8 +15,8 @@ for(let s=1;s<=5;s++){
    for(let n=1;n<=10;n++){
     const z=n<=3?8.9-(n-1)*1.65:0.3-(n-4)*1.65;
     const id='S'+s+'-'+letter+'-'+n;
-    // Long A–E sections on S1 and S5 have a double-height A.
-    const tall=(s===1||s===5)&&side==='left'&&n>=4;
+    // Double-height A: long S1 section and both S5 sections, A–E side only.
+    const tall=side==='left'&&(s===5||s===1&&n>=4);
     if(tall&&letter==='E')continue;
     const levelStart=tall&&i>0?i+1:i,levelSpan=tall&&i===0?2:1;
     cells.push({id,street:'S'+s,side,letter,n,x:rackX,y:.55+(levelStart+(levelSpan-1)/2)*.88,z,w:1.23,h:.76+(levelSpan-1)*.88,d:1.51,levelStart,levelSpan,items:[]});
@@ -31,7 +31,7 @@ function inventoryLines(raw){
  return raw.split(/\r?\n/).map(line=>line.replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').trim()).filter(Boolean);
 }
 function unmappedS1E(data){return Array.from({length:7},(_,i)=>i+4).filter(n=>inventoryLines(data?.S1?.E?.[n]).length>0).length;}
-function unmappedLongE(data){return ['S1','S5'].flatMap(street=>Array.from({length:7},(_,i)=>i+4).filter(n=>inventoryLines(data?.[street]?.E?.[n]).length>0).map(n=>street+'-E-'+n));}
+function unmappedLongE(data){return ['S1','S5'].flatMap(street=>Array.from({length:street==='S1'?7:10},(_,i)=>i+(street==='S1'?4:1)).filter(n=>inventoryLines(data?.[street]?.E?.[n]).length>0).map(n=>street+'-E-'+n));}
 function cellTone(cell,ready,selected,matched){
  return selected?'f5ca63':!ready?'53677a':matched&&cell.items.length?'d09e50':cell.items.length?'6bb58b':'53677a';
 }

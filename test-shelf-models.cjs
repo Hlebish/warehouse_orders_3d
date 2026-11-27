@@ -13,7 +13,7 @@ assert.equal(e.apply(s,['S3-E-1','S3-F-1'],'hood'),null);
 assert.equal(e.apply(s,['S3-A-1','S4-B-1'],'hood'),null);
 assert.deepEqual(e.extend(s,['S3-A-1'],1),['S3-A-1','S3-B-1']);
 s=e.apply(s,['S3-B-1','S3-A-1'],'hood');assert.deepEqual(s,[{ids:['S3-A-1','S3-B-1'],model:'hood'}]);
-assert.equal(e.index(s).size,16);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
+assert.equal(e.index(s).size,19);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
 assert.equal(e.apply(s,['S3-B-1'],'wing'),null);
 assert.deepEqual(e.apply(s,['S3-B-1','S3-A-1'],'default'),[]);
 assert.deepEqual(e.validate([{ids:['bogus'],model:'wing'},{ids:['S1-A-1','S1-B-1'],model:'wing'},{ids:['S1-A-1'],model:'__proto__'}]),[]);
@@ -43,7 +43,7 @@ for(const model of ['wing','hood','piston','shelf'])for(const side of [-1,1]){
  }else assert.equal(points.length,0);
  if(model==='piston'){const stock=boxes.filter(v=>['126d83','197f92','1d7183','268b9a'].includes(v[6]));assert(stock.length>50);assert(new Set(stock.map(v=>v[2])).size===5);assert(new Set(stock.map(v=>v[1])).size===6);}
 }
-assert.equal(cells.length,436);
+assert.equal(cells.length,433);
 console.log('Reference shelf models and editor passed');
 
 for(const model of ['wing','hood','piston']){
@@ -113,7 +113,7 @@ for(let n=1;n<=3;n++){
  assert.equal(e.neighbor('S1-D-'+n,1),'S1-E-'+n);
 }
 
-for(let n=4;n<=10;n++){
+for(let n=1;n<=10;n++){
  const a='S5-A-'+n,b='S5-B-'+n,d='S5-D-'+n;
  assert.equal(e.index([]).get(a).model,'hood');assert.equal(e.canUse([a],'hood'),true);assert.equal(e.canUse([a],'wing'),false);assert.equal(e.canUse([a],'piston'),false);
  assert.equal(e.extend([],[a],1),null);assert.equal(e.extend([],[b],-1),null);assert.equal(e.neighbor(d,1),null);
@@ -122,10 +122,4 @@ for(let n=4;n<=10;n++){
  const bounds=e.bounds(e.index([]).get(a));assert(Math.abs(bounds.h-1.64)<1e-8);
  assert.equal(e.neighbor('S5-J-'+n,1),'S5-K-'+n);
  assert(e.canUse(['S5-F-'+n],'wing'));
-}
-for(let n=1;n<=3;n++){
- const a='S5-A-'+n,b='S5-B-'+n;
- assert(!e.index([]).has(a));assert.equal(e.canUse([a],'wing'),true);assert.equal(e.canUse([a],'hood'),false);
- assert.deepEqual(e.validate([{ids:[a,b],model:'hood'}]),[{ids:[a,b],model:'hood'}]);
- assert.equal(e.neighbor('S5-D-'+n,1),'S5-E-'+n);
 }
