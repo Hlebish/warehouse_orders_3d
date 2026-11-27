@@ -52,3 +52,29 @@ for(const model of ['wing','hood','piston']){
  drawShelf((...v)=>boxes.push(v),()=>quads++,b,model,1,'53677a',false);
  assert.equal(quads,0);assert.equal(boxes.length,9);assert(!boxes.some(v=>['126d83','197f92','1d7183','268b9a','6bb58b'].includes(v[6])));
 }
+
+const {packingPlan}=require('./shelf-models.js');
+const layouts={wing:new Set(),hood:new Set()};
+for(const c of cells)for(const model of ['wing','hood']){
+ const above=e.neighbor(c.id,1);
+ if(model==='hood'&&!above)continue;
+ const b=e.bounds(e.apply([],model==='hood'?[c.id,above]:[c.id],model)[0]);
+ const plan=packingPlan(b,model);
+ assert.deepEqual(plan,packingPlan(b,model));
+ assert.equal(new Set(plan.map(p=>p.variant)).size,3);
+ assert(plan.length>=(model==='wing'?4:3)&&plan.length<=(model==='wing'?6:4));
+ layouts[model].add(JSON.stringify(plan.map(p=>p.variant)));
+ for(let i=1;i<plan.length;i++){
+  const a=plan[i-1],v=plan[i];
+  assert(v.z-a.z>(v.depth+a.depth)/2);
+ }
+ // Validate all six silhouettes and all seeded arrangements, including
+ // top/bottom levels and mirrored aisle sides.
+ for(const side of [-1,1]){
+  let valid=true;
+  drawShelf(()=>{},pts=>{for(const p of pts)if(!p.every(Number.isFinite)||p[1]<b.base-.001||p[1]>b.top+.001||Math.abs(p[0]-b.x)>b.w/2+.001||Math.abs(p[2]-b.z)>b.d/2+.001)valid=false;},b,model,side,'53677a');
+  assert(valid);
+ }
+}
+assert(layouts.wing.size>12);assert(layouts.hood.size>6);
+assert.deepEqual(packingPlan(e.bounds(e.apply([],['S3-A-1'],'piston')[0]),'piston'),[]);

@@ -68,39 +68,77 @@ function envelope(quad,rows,z,base,lean,thickness,color,accent){
   if(i===rows.length-1)quad([front(d),front(c),back(c),back(d)],accent,.92);
  }
 }
-// A broad, shaped fender envelope has a tall outer end and a concave
-// upper edge, matching the folded cardboard around a wheel-arch part.
-function wingPack(quad,b,base,z,side,index){
- const w=b.w-.20,h=.59-(index%3)*.023;
- const profile=[[-.5,.08,.39],[-.38,.018,.49],[-.24,0,.28],[-.10,0,.20],[.07,0,.21],[.22,.008,.32],[.35,.035,.79],[.46,.07,1],[.5,.11,.84]];
- const rows=profile.map(([u,low,high])=>[[b.x+side*u*w,base+low*h],[b.x+side*u*w,base+high*h]]);
- const lean=index%2?.11:.07,thickness=.115;
- const tint=['c5a16a','b8945f','d0af7b','bd995f','c9a873'][index%5];
- envelope(quad,rows,z,base,lean,thickness,tint,index%3===0?'ad4c43':'b08b57');
- // White/green inventory stickers on the narrow end facing the aisle.
- const [lo,hi]=rows.at(-1),x=lo[0]+side*.001;
- const sticker=(y,height,width,color)=>{
+// Three distinct silhouettes per category, inspired by the warehouse photos.
+// Profile columns: normalized horizontal position, lower edge, upper edge.
+const WING_PROFILES=[
+ [[-.5,.08,.39],[-.38,.018,.49],[-.24,0,.28],[-.10,0,.20],[.07,0,.21],[.22,.008,.32],[.35,.035,.79],[.46,.07,1],[.5,.11,.84]],
+ [[-.5,.12,.72],[-.38,.025,.87],[-.23,0,.52],[-.08,0,.38],[.10,0,.36],[.27,.015,.60],[.40,.035,1],[.50,.12,.91]],
+ [[-.5,.13,.53],[-.41,.04,.65],[-.26,0,.42],[-.09,0,.25],[.10,0,.30],[.25,.025,.59],[.38,.04,.88],[.47,.065,1],[.50,.12,.86]]
+];
+const HOOD_PROFILES=[
+ [[-.50,.11,.84],[-.40,.02,.98],[-.28,0,1],[.31,.008,.99],[.42,.035,.94],[.50,.15,.82]],
+ [[-.50,.19,.71],[-.39,.035,.91],[-.25,0,1],[.24,0,1],[.40,.035,.91],[.50,.19,.71]],
+ [[-.50,.045,.92],[-.43,.012,.98],[-.32,0,1],[.32,0,1],[.43,.012,.98],[.50,.045,.92]]
+];
+const WING_STYLE=[
+ {width:.96,height:.62,depth:.118,color:'c5a16a',accent:'ad4c43'},
+ {width:.88,height:.555,depth:.105,color:'b99460',accent:'c7a36f'},
+ {width:1,height:.59,depth:.132,color:'d0af7b',accent:'a38b64'}
+];
+const HOOD_STYLE=[
+ {width:.97,height:1.49,depth:.145,color:'c4a36e',accent:'af8c59'},
+ {width:.91,height:1.46,depth:.165,color:'d0b382',accent:'a9895d'},
+ {width:1,height:1.44,depth:.125,color:'bd9b65',accent:'c6a477'}
+];
+// Stable pseudo-random arrangement keyed to the physical address, not frame
+// time or inventory. A shuffled cycle guarantees all three variants per shelf.
+function shelfSeed(b,model){
+ const key=(b.cells?.map(c=>c.id).join('+')||[b.x,b.y,b.z].join(','))+'|'+model;
+ let hash=2166136261;for(let i=0;i<key.length;i++)hash=Math.imul(hash^key.charCodeAt(i),16777619);
+ return hash>>>0;
+}
+function packingPlan(b,model){
+ if(model!=='wing'&&model!=='hood')return [];
+ let seed=shelfSeed(b,model);
+ const random=()=>{seed=(seed+0x6D2B79F5)>>>0;let n=seed;n=Math.imul(n^(n>>>15),n|1);n^=n+Math.imul(n^(n>>>7),n|61);return ((n^(n>>>14))>>>0)/4294967296;};
+ const wing=model==='wing',styles=wing?WING_STYLE:HOOD_STYLE;
+ const count=wing?4+Math.floor(random()*3):3+Math.floor(random()*2);
+ const lean=(wing?.065:.045)+random()*(wing?.045:.030);
+ const pitch=(b.d-.26)/count,origin=b.z-lean*(wing?.62:1.49)/2;
+ let order=[],out=[];
+ for(let i=0;i<count;i++){
+  if(!order.length){order=[0,1,2];for(let j=2;j>0;j--){const k=Math.floor(random()*(j+1));[order[j],order[k]]=[order[k],order[j]];}}
+  const variant=order.pop(),style=styles[variant];
+  out.push({variant,z:origin+(i-(count-1)/2)*pitch,lean,width:style.width*(wing?b.w-.20:b.w-.13),height:style.height,depth:style.depth,color:style.color,accent:style.accent,sticker:random()<.5?'9edc59':'d5bd56'});
+ }
+ return out;
+}
+function wingPack(quad,b,base,side,p){
+ const {width:w,height:h,z,lean,depth,variant,color,accent}=p;
+ const rows=WING_PROFILES[variant].map(([u,low,high])=>[[b.x+side*u*w,base+low*h],[b.x+side*u*w,base+high*h]]);
+ envelope(quad,rows,z,base,lean,depth,color,accent);
+ const x=rows.at(-1)[0][0]+side*.001;
+ const sticker=(y,height,width,tint)=>{
   const mid=z+lean*(y-base);
-  quad([[x,y-height/2,mid-width/2],[x,y+height/2,mid-width/2],[x,y+height/2,mid+width/2],[x,y-height/2,mid+width/2]],color,1);
+  quad([[x,y-height/2,mid-width/2],[x,y+height/2,mid-width/2],[x,y+height/2,mid+width/2],[x,y-height/2,mid+width/2]],tint,1);
  };
  sticker(base+h*.57,.075,.074,'eee9d7');
- sticker(base+h*.32,.055,.065,index%2?'9edc59':'d5bd56');
+ sticker(base+h*.32,.055,.065,p.sticker);
 }
-// Hood carton: wide thin package with chamfered corners, folded seams,
-// slight lean and opaque cardboard faces, as in the reference photographs.
-function hoodPack(quad,b,base,z,side,index){
- const w=b.w-.13,h=1.46-(index%3)*.025;
- const rows=[[-.50,.11,.84],[-.40,.02,.98],[-.28,0,1],[.31,.008,.99],[.42,.035,.94],[.50,.15,.82]].map(([u,low,high])=>[[b.x+side*u*w,base+low*h],[b.x+side*u*w,base+high*h]]);
- const lean=.065+(index%2)*.012,thickness=.15;
- const tint=['c4a36e','d0b382','bd9b65','c9ab78'][index%4];
- envelope(quad,rows,z,base,lean,thickness,tint,'af8c59');
- // Narrow crease across the broad cardboard face and a dark printed label.
- const face=(u,y)=>[b.x+side*u*w,base+y*h,z+lean*y*h+thickness/2+.001];
- quad([face(-.01,.13),face(.005,.13),face(.005,.87),face(-.01,.87)],'a98a5e',1);
- quad([face(-.26,.58),face(.24,.58),face(.24,.69),face(-.26,.69)],'343638',1);
- quad([face(-.21,.617),face(.18,.617),face(.18,.64),face(-.21,.64)],'ded6bb',1);
+function hoodPack(quad,b,base,side,p){
+ const {width:w,height:h,z,lean,depth,variant,color,accent}=p;
+ const rows=HOOD_PROFILES[variant].map(([u,low,high])=>[[b.x+side*u*w,base+low*h],[b.x+side*u*w,base+high*h]]);
+ envelope(quad,rows,z,base,lean,depth,color,accent);
+ const face=(u,y)=>[b.x+side*u*w,base+y*h,z+lean*y*h+depth/2+.001];
+ // Distinct cardboard seam and printing patterns on the three packages.
+ const stripe=variant===1?-.25:variant===2?.21:-.01;
+ quad([face(stripe,.22),face(stripe+.015,.22),face(stripe+.015,.80),face(stripe,.80)],'a98a5e',1);
+ const ink=variant===1?'93453c':'343638';
+ const labelY=variant===2?.43:.60;
+ quad([face(-.26,labelY),face(.24,labelY),face(.24,labelY+.10),face(-.26,labelY+.10)],ink,1);
+ quad([face(-.21,labelY+.032),face(.18,labelY+.032),face(.18,labelY+.054),face(-.21,labelY+.054)],'ded6bb',1);
  const x=b.x+side*(w/2+.001),y=base+h*.48,mid=z+lean*(y-base);
- quad([[x,y-.065,mid-.055],[x,y+.065,mid-.055],[x,y+.065,mid+.055],[x,y-.065,mid+.055]],'eee6d4',1);
+ quad([[x,y-.065,mid-.045],[x,y+.065,mid-.045],[x,y+.065,mid+.045],[x,y-.065,mid+.045]],'eee6d4',1);
 }
 function pistonStock(box,b,base,side){
  const cols=5,rows=3,w=(b.w-.13)/rows,d=(b.d-.13)/cols,h=.095;
@@ -127,12 +165,10 @@ function drawShelf(box,quad,b,model,side,accent,showStock=true){
  const base=pallet(box,b);
  if(!showStock)return;
  if(model==='piston'){pistonStock(box,b,base,side);return;}
- const wing=model==='wing',count=wing?5:4,pitch=(b.d-.22)/count;
- for(let i=0;i<count;i++){
-  const z=b.z+(i-(count-1)/2)*pitch-.04;
-  if(wing)wingPack(quad,b,base,z,side,i);else hoodPack(quad,b,base,z,side,i);
+ for(const pack of packingPlan(b,model)){
+  if(model==='wing')wingPack(quad,b,base,side,pack);else hoodPack(quad,b,base,side,pack);
  }
 }
-const api={createShelfEditor,drawShelf};
+const api={createShelfEditor,drawShelf,packingPlan};
 if(typeof module!=='undefined')module.exports=api;else root.WarehouseShelves=api;
 })(globalThis);
