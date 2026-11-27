@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,cellArticles,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,search,cellArticles,articlePopupPosition,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels'), stage=$('stage');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -78,22 +78,27 @@ const landmarkLabels=[
  {pos:[12.4,1.5,12.65],el:tag('Лестница')}
 ];
 for(const m of landmarkLabels){m.el.classList.add('landmark-tag');m.el.hidden=true;}
-const articlePopup=document.createElement('div');articlePopup.className='cell-article-popup';articlePopup.hidden=true;articlePopup.setAttribute('aria-label','Артикулы выбранной ячейки');labels.appendChild(articlePopup);let popupRows=0;
+const articlePopup=document.createElement('div');articlePopup.className='cell-article-popup';articlePopup.hidden=true;articlePopup.setAttribute('aria-label','Артикулы выбранной ячейки');labels.appendChild(articlePopup);let popupRows=0,popupWidth=0,popupHeight=0;
 function renderArticlePopup(){
- articlePopup.replaceChildren();popupRows=0;if(!selected||!inventoryReady){articlePopup.hidden=true;return;}
+ articlePopup.replaceChildren();popupRows=0;popupWidth=0;popupHeight=0;if(!selected||!inventoryReady){articlePopup.hidden=true;return;}
  const articles=cellArticles(selected.items),rows=articles.slice(0,5);
  if(!rows.length)rows.push(selected.items.length?'Нет артикулов':'Пусто');
  if(articles.length>5)rows.push('+'+(articles.length-5)+' ещё');
  for(const text of rows){const row=document.createElement('div');row.textContent=text;articlePopup.appendChild(row);}popupRows=rows.length;
 }
 function placeArticlePopup(xy,off,w,h){
- if(!popupRows||off||!xy){articlePopup.hidden=true;return;}
- const width=Math.min(156,w-16),height=popupRows*19+10;
- if(w<80||h<height+38){articlePopup.hidden=true;return;}
- articlePopup.hidden=false;articlePopup.style.width=width+'px';
- articlePopup.style.left=clamp(xy[0],width/2+8,w-width/2-8)+'px';
- const below=xy[1]+17,above=xy[1]-17-height;
- articlePopup.style.top=clamp(below+height<=h-8?below:above,8,h-height-8)+'px';
+ if(!popupRows||off||!xy||w<80){articlePopup.hidden=true;return;}
+ // Measure intrinsic dimensions only when contents or viewport width changes.
+ if(!popupWidth||popupWidth>w-10){
+  articlePopup.hidden=false;articlePopup.style.maxWidth=Math.min(112,w-10)+'px';
+  popupWidth=articlePopup.offsetWidth;popupHeight=articlePopup.offsetHeight;
+ }
+ const rect=labels.getBoundingClientRect();
+ const visible=[selectionTag,...markers.map(m=>m.el),...landmarkLabels.map(m=>m.el),$('route-overlay'),$('result-panel'),stage.querySelector('.map-tools'),stage.querySelector('.legend')];
+ const obstacles=visible.filter(el=>el&&!el.hidden&&el.getClientRects().length).map(el=>{const r=el.getBoundingClientRect();return {left:r.left-rect.left,right:r.right-rect.left,top:r.top-rect.top,bottom:r.bottom-rect.top};});
+ const pos=articlePopupPosition({x:xy[0],y:xy[1],width:selectionTag.offsetWidth,height:selectionTag.offsetHeight},popupWidth,popupHeight,w,h,obstacles);
+ if(!pos){articlePopup.hidden=true;return;}
+ articlePopup.hidden=false;articlePopup.style.left=pos.left+'px';articlePopup.style.top=pos.top+'px';
 }
 function tag(text,point){const el=document.createElement(point?'button':'span');el.className=point?'tag scene-pin':'tag';el.textContent=text;if(point){el.type='button';el.setAttribute('aria-label','Перейти к точке '+point.name);el.setAttribute('aria-pressed',String(point.id===origin?.id));el.dataset.pointId=point.id;el.onclick=e=>{if(e.detail===0)choosePoint(point);};}labels.appendChild(el);return el;}
 function project(pos){let v=sub(pos,basis.eye),d=dot(v,basis.forward);if(d<.3)return null;let x=dot(v,basis.right)*basis.zoom/(basis.aspect*d),y=dot(v,basis.up)*basis.zoom/d;return [(x+1)*canvas.clientWidth/2,(1-y)*canvas.clientHeight/2];}

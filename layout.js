@@ -144,5 +144,29 @@ function streetOverviewPose(point,aspect,halfFov){
  return {target:[point.x*bias,0,centerZ+(point.z-centerZ)*bias],yaw:0,pitch:Math.PI/2,distance};
 }
 
-const layout={cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+// Find the closest compact popup position that does not cover controls.
+function articlePopupPosition(anchor,width,height,w,h,obstacles){
+ const pad=5,gap=5;
+ if(width>w-pad*2||height>h-pad*2)return null;
+ const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+ const x=anchor.x,y=anchor.y,r=anchor.width/2,b=anchor.height/2;
+ const candidates=[
+ [x-width/2,y+b+gap],[x-width/2,y-b-height-gap],
+ [x+r+gap,y-height/2],[x-r-width-gap,y-height/2],
+ [x+r+gap,y+b+gap],[x-r-width-gap,y+b+gap],
+ [x+r+gap,y-b-height-gap],[x-r-width-gap,y-b-height-gap]
+ ];
+ const seen=new Set(),valid=[];
+ for(const [cx,cy] of candidates){
+  const left=clamp(cx,pad,w-width-pad),top=clamp(cy,pad,h-height-pad);
+  const key=left+':'+top;if(seen.has(key))continue;seen.add(key);
+  if(obstacles.some(o=>left<o.right+gap&&left+width>o.left-gap&&top<o.bottom+gap&&top+height>o.top-gap))continue;
+  const distance=Math.hypot(left+width/2-x,top+height/2-y);
+  valid.push({left,top,distance});
+ }
+ valid.sort((a,b)=>a.distance-b.distance);
+ return valid.length?{left:valid[0].left,top:valid[0].top}:null;
+}
+
+const layout={articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
