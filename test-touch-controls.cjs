@@ -50,3 +50,5 @@ for(const [first,second] of [['S3',null],[null,'S3'],['S2','S3'],[null,null]]){
  const {c,events}=fixture();c.down(1,{...b[0],pointId:'S4'});c.move(1,p(-20,8));c.flush(20);c.up(1,p(-20,8),25);
  assert.equal(events[0].kind,'orbit');assert(!events.some(e=>e.kind==='tap'));
 }
+
+{const {c}=fixture();assert(!c.active());c.down(1,p(0,0));assert(c.active());c.up(1,p(0,0),10);assert(!c.active());c.down(2,p(0,0));c.reset();assert(!c.active());}

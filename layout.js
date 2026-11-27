@@ -25,7 +25,8 @@ function applyInventory(data){
  let occupied=0,lines=0;
  for(const c of cells){
   const raw=data?.[c.street]?.[c.letter]?.[String(c.n)];
-  c.items=typeof raw==='string'?raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];
+  const next=typeof raw==='string'?raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];
+  if(next.length!==c.items.length||next.some((line,i)=>line!==c.items[i]))c.items=next;
   if(c.items.length){occupied++;lines+=c.items.length;}
  }
  return {occupied,lines,total:cells.length};
@@ -55,15 +56,30 @@ function cellArticles(items){
  return out;
 }
 
+const normalizeCode=value=>String(value||'').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu,'');
 function search(value){
- const q=String(value).trim().toUpperCase();if(!q)return [];
+ const q=String(value).normalize('NFKC').trim().toUpperCase();if(!q)return [];
  const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);
- const compact=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,'');
- const article=compact(q),isArticle=/^[A-Z0-9\s._-]+$/.test(q)&&/[A-Z]/.test(article)&&/\d/.test(article)&&article.length>=4;
- const normal=s=>s.toUpperCase().replace(/Ё/g,'Е').replace(/[^A-ZА-ЯІЇЄҐ0-9]+/g,' ').trim();
- const words=normal(q).split(/\s+/).filter(Boolean);
- return cells.filter(c=>c.items.some(item=>isArticle?compact(item).includes(article):words.length&&words.every(word=>normal(item).includes(word))));
+ const article=normalizeCode(q);
+ const isArticle=/^[\p{L}\p{N}\s._/+()-]+$/u.test(q)&&/\d/.test(article)&&article.length>=3;
+ const normal=s=>s.normalize('NFKC').toUpperCase().replace(/Ё/g,'Е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ const words=normal(q).split(/\s+/).filter(Boolean),ranked=[];
+ for(const c of cells){
+  let score=0;
+  for(const item of c.items){
+   const codes=cellArticles([item]).map(normalizeCode);
+   if(isArticle&&codes.includes(article)){score=3;break;}
+   if(isArticle&&codes.some(code=>code.startsWith(article)))score=Math.max(score,2);
+   else if(isArticle&&codes.some(code=>code.includes(article)))score=Math.max(score,1);
+   // Legacy unstructured rows can contain the article after the name.
+   if(isArticle&&!/\s+[—–]\s+/u.test(item)&&normalizeCode(item).includes(article))score=Math.max(score,1);
+   if(words.length&&words.every(word=>normal(item).includes(word)))score=Math.max(score,1);
+  }
+  if(score)ranked.push({c,score});
+ }
+ return ranked.sort((a,b)=>b.score-a.score).map(r=>r.c);
 }
+
 function navigation(streets){
  const points=[{id:"entry",name:"Вход",x:-15,z:3},{id:"photo",name:"Фотозона",x:-14.2,z:8.7},...streets.map(s=>({id:s.id,name:s.id,x:s.x,z:3}))];
  function route(origin,cell){
@@ -104,16 +120,18 @@ function walkingPlan(origin,cell,route,streets){
  return plan;
 }
 function exactArticleMatches(value){
- const normalize=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
- const ap=s=>normalize(s).match(/^A[ \t-]*P[ \t-]*[A-Z][ \t-]*[A-Z][ \t-]*\d(?:[ \t-]*\d)*(?:[A-Z][A-Z0-9]*|-[A-Z][A-Z0-9]*|[ \t-]+[A-Z]\d*(?![A-Z0-9]))?/);
- const compact=s=>normalize(s).replace(/[^\p{L}\p{N}]/gu,'');
- const q=compact(ap(value)?.[0]||value);
- if(!q)return [];
+ const q=normalizeCode(value);if(!q)return [];
  return cells.filter(c=>c.items.some(line=>{
-  const code=ap(line);
-  if(code||ap(q))return !!code&&compact(code[0])===q;
-  const tokens=normalize(line).match(/[\p{L}\p{N}]+/gu)||[];
-  for(let i=0;i<tokens.length;i++){let joined='';for(let j=i;j<Math.min(i+5,tokens.length);j++){joined+=tokens[j];if(joined===q)return true;if(joined.length>=q.length)break;}}
+  const codes=cellArticles([line]);
+  if(codes.length||/\s+[—–]\s+/u.test(line))return codes.some(code=>normalizeCode(code)===q);
+  // For old rows with the code after a description, use exact word groups.
+  const tokens=line.normalize('NFKC').toUpperCase().match(/[\p{L}\p{N}]+/gu)||[];
+  for(let i=0;i<tokens.length;i++){
+   let joined='';
+   for(let j=i;j<Math.min(i+5,tokens.length);j++){
+    joined+=tokens[j];if(joined===q)return true;if(joined.length>=q.length)break;
+   }
+  }
   return false;
  }));
 }

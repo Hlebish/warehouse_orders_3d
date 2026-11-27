@@ -106,3 +106,5 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 
 /* Small stock tooltip: intrinsic width and dense rows; never cover scene controls. */
 .cell-article-popup{width:max-content;max-width:112px;transform:none;padding:2px 4px;border-radius:4px;font:500 10px/14px system-ui,sans-serif;background:#142330f2;box-shadow:0 2px 5px #0004;z-index:1}.cell-article-popup>div{height:14px;line-height:14px}.scene-pin{z-index:3}.tag.active{z-index:3}
+
+#stage>#error{inset:auto 12px 50% 12px;transform:translateY(50%);z-index:8;margin:auto;max-width:340px;text-align:center;padding:12px 15px;border:1px solid #6b8395;box-shadow:0 4px 18px #0006;font-size:13px;pointer-events:none}

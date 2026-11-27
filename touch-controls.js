@@ -91,7 +91,7 @@
    if(click)emit({kind:'tap',x:p.x,y:p.y,pointId});
   }
   function reset(){pointers.clear();tapAllowed=false;pairReleased=false;rebase();}
-  return {down,move,up,flush,reset,has:id=>pointers.has(id)};
+  return {down,move,up,flush,reset,has:id=>pointers.has(id),active:()=>pointers.size>0};
  }
  const api={createInput,classify,metrics};
  if(typeof module!=='undefined')module.exports=api;else root.WarehouseTouch=api;

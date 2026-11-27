@@ -37,3 +37,13 @@ const {articlePopupPosition}=require('./layout.js');
 const anchor={x:150,y:200,width:55,height:24},tagRect={left:122.5,right:177.5,top:188,bottom:212},pinRect={left:120,right:180,top:216,bottom:265};
 const pos=articlePopupPosition(anchor,74,47,300,500,[tagRect,pinRect]);assert(pos);assert(pos.top+47<=183||pos.left+74<=115||pos.left>=185);assert.equal(articlePopupPosition(anchor,74,47,300,500,[{left:0,right:300,top:0,bottom:500}]),null);
 for(const x of [16,55,150,250,284])for(const y of [15,60,200,420,485]){const p=articlePopupPosition({x,y,width:50,height:24},80,48,300,500,[]);assert(p);assert(p.left>=5&&p.left+80<=295&&p.top>=5&&p.top+48<=495);}
+
+// Exact article outranks suffixes and descriptions; live refresh keeps unchanged cell arrays.
+applyInventory({S1:{A:{1:'APBM2802A — Крыло',2:'APBM2802 — Крыло',3:'FP 4819 311 — Бампер',4:'FP 4819 311 A — Бампер',5:'КН3755 280 — Капот',6:'БЕЗ АРТИКУЛА — APBM2802'}},S2:{A:{1:'APBM2802 — Другой товар'}}});
+assert.deepEqual(search('APBM2802').slice(0,2).map(c=>c.id),['S1-A-2','S2-A-1']);
+assert.deepEqual(exactArticleMatches('APBM2802').map(c=>c.id),['S1-A-2','S2-A-1']);
+assert.deepEqual(exactArticleMatches('FP 4819 311').map(c=>c.id),['S1-A-3']);
+assert.deepEqual(exactArticleMatches('КН3755 280').map(c=>c.id),['S1-A-5']);
+const sameCell=search('S1-A-2')[0],sameItems=sameCell.items;
+applyInventory({S1:{A:{2:'APBM2802 — Крыло'}}});assert.equal(sameCell.items,sameItems);
+applyInventory(null);assert.equal(sameCell.items.length,0);
