@@ -44,54 +44,67 @@ function createShelfEditor(cells){
  function bounds(entry){const cs=entry.ids.map(id=>byId.get(id));const c=cs[0],last=cs.at(-1);return {x:c.x,z:c.z,y:(c.y+last.y)/2,w:c.w,h:last.y-c.y+c.h,d:c.d,base:c.y-c.h/2,top:last.y+last.h/2,cells:cs};}
  return {validate,index,group,pick,extend,apply,bounds,neighbor};
 }
-// Each panel is a shallow, closed mesh with shaped sides, rather than a filled cuboid.
-// Quads use the same vertex format as the main scene and work in Canvas fallback.
-function wingMesh(quad,x,y,z,side,color){
- // The curved open edge forms the wheel-arch notch. Flat flange along the back.
- const count=12,rows=[];
- for(let i=0;i<=count;i++){
-  const t=-1+2*i/count,zz=z+t*.67;
-  const arch=Math.abs(t)<.72?.39*Math.sqrt(Math.max(0,1-(t/.72)**2)):0;
-  const taper=.10*Math.abs(t)**2,back=-.46+taper,front=.47-arch-taper;
-  const yy=y+.035*(1-t*t);
-  rows.push([[x+side*back,yy,zz],[x+side*front,yy+.065,zz]]);
+// Upright, solid cardboard cartons with open tops, folded lips and labels.
+// Parts have closed, shaped meshes; no overlapping cartons or mid-level shelf.
+function carton(box,x,base,z,w,h,d,side,tint){
+ const t=.024;
+ box(x,base+t/2,z,w,t,d,tint);
+ for(const s of [-1,1]){
+  box(x+s*(w/2-t/2),base+h/2,z,t,h,d,tint);
+  box(x,base+h/2,z+s*(d/2-t/2),w-2*t,h,t,'b58b56');
+  // Reinforced upper rims.
+  box(x+s*(w/2-t/2),base+h-t/2,z,.035,t,d,'d0aa77');
+  box(x,base+h-t/2,z+s*(d/2-t/2),w-2*t,t,.035,'c9a16c');
  }
- for(let i=1;i<rows.length;i++){
-  const [a,b]=rows[i-1],[c,d]=rows[i],down=p=>[p[0],p[1]-.028,p[2]];
-  quad([a,b,d,c],color,1.12);quad([down(a),down(c),down(d),down(b)],color,.65);
-  quad([a,c,down(c),down(a)],color,.82);quad([b,down(b),down(d),d],color,.91);
-  if(i===1)quad([a,down(a),down(b),b],color,.8);
-  if(i===rows.length-1)quad([c,d,down(d),down(c)],color,.8);
- }
+ // Packing tape and shipping label on the aisle-facing narrow end.
+ const front=x+side*(w/2+.003);
+ box(front,base+h*.5,z,.008,h*.91,.05,'dcc194');
+ box(front+side*.005,base+h*.71,z-.045,.008,Math.min(.10,h*.22),Math.min(.12,d*.45),'f2e7cc');
+ box(front+side*.010,base+h*.71,z-.045,.008,Math.min(.035,h*.08),Math.min(.075,d*.30),'77756c');
 }
-function hoodMesh(quad,x,base,z,side,color){
- // Stamped hood: tapered corners, raised middle and two pressed shoulders.
- const rows=[];
- for(const [t,width] of [[0,.54],[.12,.65],[.85,.68],[1,.57]]){
-  const yy=base+.10+t*1.38,xx=x-side*t*.17;
-  rows.push([-1,-.55,0,.55,1].map(u=>[xx+side*.075*(1-u*u),yy,z+u*width]));
- }
- const back=p=>[p[0]-side*.032,p[1],p[2]];
+// Extrude each shaped metal strip along Z, creating a closed 3D panel.
+function solidPanel(quad,rows,color,thickness){
+ const back=p=>[p[0],p[1],p[2]-thickness];
  for(let i=1;i<rows.length;i++)for(let j=1;j<rows[i].length;j++){
   const a=rows[i-1][j-1],b=rows[i-1][j],c=rows[i][j],d=rows[i][j-1];
-  quad([a,b,c,d],color,j===2||j===3?1.12:.94);quad([back(a),back(d),back(c),back(b)],color,.72);
+  quad([a,b,c,d],color,1.12);quad([back(a),back(d),back(c),back(b)],color,.72);
   if(j===1)quad([a,d,back(d),back(a)],color,.83);
-  if(j===rows[i].length-1)quad([b,back(b),back(c),c],color,.85);
+  if(j===rows[i].length-1)quad([b,back(b),back(c),c],color,.88);
   if(i===1)quad([a,back(a),back(b),b],color,.8);
   if(i===rows.length-1)quad([d,c,back(c),back(d)],color,.9);
  }
 }
+function wingMesh(quad,x,base,z,mirror,color){
+ const rows=[];
+ for(let i=0;i<=16;i++){
+  const t=-1+i/8,xx=x+mirror*t*.49;
+  const arch=Math.abs(t)<.72?.31*Math.sqrt(Math.max(0,1-(t/.72)**2)):0;
+  const low=base+.045+arch,high=base+.60-.065*t*t;
+  const crown=.045*(1-t*t);
+  rows.push([[xx,low,z+crown*.4],[xx,(low+high)/2,z+crown],[xx,high,z+crown*.3]]);
+ }
+ solidPanel(quad,rows,color,.028);
+}
+function hoodMesh(quad,x,base,z,color){
+ const rows=[];
+ for(const [t,width] of [[0,.43],[.10,.49],[.82,.50],[1,.43]]){
+  const y=base+.055+t*1.46;
+  rows.push([-1,-.55,0,.55,1].map(u=>[x+u*width,y,z-.10*t+.060*(1-u*u)]));
+ }
+ solidPanel(quad,rows,color,.035);
+}
 function drawShelf(box,quad,b,model,side,accent){
- // A shallow front label rail indicates occupancy/selection without obscuring parts.
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
- if(model==='wing'){
-  for(let i=0;i<4;i++)wingMesh(quad,b.x,b.base+.12+i*.14,b.z,side,['a7b1bc','8f9eab','bac3cc','9caab6'][i]);
- }else if(model==='hood'){
-  // Three separate panels leaning toward the back, with protective spacers.
-  for(let i=0;i<3;i++){
-   hoodMesh(quad,b.x+side*(-.30+i*.31),b.base,b.z,side,['9daab7','bcc6cf','8999a8'][i]);
-   box(b.x+side*(-.30+i*.31),b.base+.05,b.z,.11,.10,1.30,'655d51');
-  }
+ if(model==='shelf')return;
+ const wing=model==='wing',count=wing?4:3;
+ const pitch=(b.d-.12)/count,depth=pitch-.045;
+ const base=b.base+.025,w=b.w-.13,height=wing?.46:1.24;
+ for(let i=0;i<count;i++){
+  const z=b.z+(i-(count-1)/2)*pitch;
+  carton(box,b.x,base,z,w,height,depth,side,['b59060','c19a68','af8656','c9a16d'][i]);
+  const metal=['a7b1bc','8f9eab','bac3cc','9caab6'][i];
+  if(wing)wingMesh(quad,b.x,base,z,i%2?1:-1,metal);
+  else hoodMesh(quad,b.x,base,z+.035,metal);
  }
 }
 const api={createShelfEditor,drawShelf};

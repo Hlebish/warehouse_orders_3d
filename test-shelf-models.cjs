@@ -30,3 +30,20 @@ for(const model of ['wing','hood','shelf']){
 }
 assert.equal(cells.length,450);
 console.log('Shelf editor and meshes OK');
+
+// Cartons and panels remain inside each cell on both aisle sides.
+for(const model of ['wing','hood'])for(const side of [-1,1]){
+ const b=e.bounds(e.apply([],model==='wing'?['S3-A-1']:['S3-A-1','S3-B-1'],model)[0]);
+ const boxes=[],points=[];
+ drawShelf((...v)=>boxes.push(v),p=>points.push(...p),b,model,side,'f5ca63');
+ const bottoms=boxes.filter(v=>Math.abs(v[4]-.024)<1e-8&&Math.abs(v[3]-(b.w-.13))<1e-8);
+ assert.equal(bottoms.length,model==='wing'?4:3);
+ for(let i=1;i<bottoms.length;i++)assert(bottoms[i][2]-bottoms[i][5]/2>bottoms[i-1][2]+bottoms[i-1][5]/2);
+ for(const [x,y,z,w,h,d] of boxes){
+  assert(Math.abs(x-b.x)+w/2<=b.w/2+.001);
+  assert(y-h/2>=b.base-.001&&y+h/2<=b.top+.001);
+  assert(Math.abs(z-b.z)+d/2<=b.d/2+.001);
+ }
+ assert(Math.max(...points.map(p=>p[1]))-Math.min(...points.map(p=>p[1]))>(model==='wing'?.5:1.4));
+ assert(points.every(p=>p[1]>=b.base&&p[1]<=b.top&&Math.abs(p[0]-b.x)<=b.w/2&&Math.abs(p[2]-b.z)<=b.d/2));
+}
