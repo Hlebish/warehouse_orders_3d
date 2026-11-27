@@ -12,7 +12,7 @@ for(const [kind,pair] of [['pan',rotate(0,1,20,8)],['pinch',rotate(0,1.5)],['twi
  c.flush(100);assert.equal(events.length,1);assert.equal(events[0].kind,kind);
  c.move(1,p(10,30));c.move(2,p(70,40));c.flush(116);assert.equal(events[1].kind,kind);
  c.up(2,p(70,40),120);c.move(1,p(11,31));c.flush(130);assert.equal(events.length,2);
- c.move(1,p(25,40));c.flush(146);assert.equal(events.at(-1).kind,'orbit');c.up(1,p(25,40),150);assert(!events.some(e=>e.kind==='tap'));
+ c.move(1,p(25,40));c.flush(146);assert.equal(events.length,2);c.up(1,p(25,40),150);assert(!events.some(e=>e.kind==='tap'));c.down(3,p(0,0));c.move(3,p(20,20));c.flush(170);assert.equal(events.at(-1).kind,'orbit');c.up(3,p(20,20),180);
 }
 {
  const {c,events}=fixture();c.down(1,p(0,0));c.move(1,p(2,1));c.flush(16);c.up(1,p(2,1),20);assert.equal(events[0].kind,'tap');
@@ -22,3 +22,13 @@ for(const [kind,pair] of [['pan',rotate(0,1,20,8)],['pinch',rotate(0,1.5)],['twi
  const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(-30,0));c.flush(0);c.move(1,p(-36,-16));c.move(2,p(36,16));c.flush(16);c.flush(100);assert.equal(events[0].kind,'twist');
 }
 console.log('Touch controls passed');
+
+{
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(-100,0));c.move(2,p(100,0));c.flush(0);c.flush(90);assert.equal(events[0].kind,'pinch');assert(Math.abs(Math.log(events[0].ratio))<=.1200001);
+}
+{
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(-20,0));c.flush(0);c.up(1,p(-20,0),10);c.up(2,b[1],11);assert.equal(events.length,0);
+}
+{
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(20,0));c.move(2,p(100,0));c.flush(0);c.flush(90);assert.equal(events[0].kind,'pan');assert(Math.hypot(events[0].dx,events[0].dy)<=10.000001);
+}

@@ -203,6 +203,10 @@ function pan(dx,dy){
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
+function constrainTouchTarget(){
+ const bounds=[[-20,20],[-3,9],[-16,15]];
+ cam.target=cam.target.map((v,i)=>clamp(v,bounds[i][0],bounds[i][1]));
+}
 function planeOffset(state,point,width,height){
  const axes=cameraAxes(state.yaw,state.pitch);
  const scale=2*state.distance*Math.tan(HALF_FOV)/Math.max(1,height);
@@ -216,7 +220,7 @@ function pinchAt(state,point,width,height,ratio){
 // Orbit sensitivity follows viewport height (like standard orbit controls),
 // bounded so a small landscape viewport cannot make rotation excessively fast.
 function orbitDrag(dx,dy){
- const speed=clamp(2*Math.PI/Math.max(1,canvas.clientHeight),.0045,.012);
+ const speed=clamp(Math.PI/Math.max(1,canvas.clientHeight),.003,.006);
  cam.yaw=wrapAngle(cam.yaw-dx*speed);
  cam.pitch=clamp(cam.pitch+dy*speed*.85,0,Math.PI/2);dirty=true;
 }
@@ -225,11 +229,11 @@ const touch=WarehouseTouch.createInput(action=>{
  stopFlight();
  if(action.kind==='orbit')orbitDrag(action.dx,action.dy);
  else if(action.kind==='mousePan')pan(action.dx,action.dy);
- else if(action.kind==='pan')pan(action.dx,-action.dy);
+ else if(action.kind==='pan'){pan(-action.dx*.8,-action.dy*.8);constrainTouchTarget();}
  else if(action.kind==='pinch'){
   const rect=canvas.getBoundingClientRect();
-  pinchAt(cam,{x:action.center.x-rect.left,y:action.center.y-rect.top},canvas.clientWidth,canvas.clientHeight,action.ratio);
- }else if(action.kind==='twist')cam.yaw=wrapAngle(cam.yaw+action.angle);
+  pinchAt(cam,{x:action.center.x-rect.left,y:action.center.y-rect.top},canvas.clientWidth,canvas.clientHeight,Math.pow(action.ratio,.72));constrainTouchTarget();
+ }else if(action.kind==='twist')cam.yaw=wrapAngle(cam.yaw+action.angle*.8);
  dirty=true;
 });
 function flushGesture(){touch.flush(performance.now());}

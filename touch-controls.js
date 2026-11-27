@@ -20,13 +20,14 @@
  }
  function createInput(emit){
   const pointers=new Map();
-  let baseline=[],previous=[],mode=null,changed=false,tapAllowed=false,candidate=null,candidateAt=0,seen=new Set();
+  let baseline=[],previous=[],mode=null,changed=false,tapAllowed=false,candidate=null,candidateAt=0,seen=new Set(),pairReleased=false;
   const snapshot=()=>Array.from(pointers.values(),p=>({...p}));
   function rebase(){
    baseline=snapshot();previous=baseline;mode=null;changed=false;candidate=null;candidateAt=0;seen.clear();
   }
   function down(id,p){
    if(pointers.has(id))return;
+   if(pointers.size===0)pairReleased=false;
    tapAllowed=pointers.size===0&&p.button===0;
    pointers.set(id,{...p});rebase();
   }
@@ -40,10 +41,14 @@
    if(n<1||n>2||(!changed&&!candidate))return;
    const next=snapshot();
    if(n===1){
+    if(pairReleased)return;
     const p=next[0],b=baseline[0],prev=previous[0];
     if(!mode){
      if(dist(p,b)<(p.type==='mouse'?2:5))return;
      mode=p.button===2||p.shift?'mousePan':'orbit';tapAllowed=false;
+     // Remove the touch slop from the first delta rather than jumping through it.
+     const d=dist(p,b),slop=p.type==='mouse'?2:5,keep=Math.max(0,1-slop/d);
+     emit({kind:mode,dx:(p.x-b.x)*keep,dy:(p.y-b.y)*keep});previous=next;changed=false;return;
     }
     if(changed)emit({kind:mode,dx:p.x-prev.x,dy:p.y-prev.y});
     previous=next;changed=false;return;
@@ -62,6 +67,12 @@
     const wait=kind==='twist'?24:40;
     if(!ending&&(now-candidateAt<wait||(!both&&now-candidateAt<70)))return;
     mode=kind;candidate=null;
+    // The first accepted frame is intentionally limited. Earlier ambiguous
+    // movement must not become one sudden zoom/pan/rotation.
+    if(mode==='pan'){const d=dist(a,b),gain=d>0?Math.min(1,10/d):0;emit({kind:mode,dx:(b.x-a.x)*gain,dy:(b.y-a.y)*gain});}
+    else if(mode==='pinch'){const r=Math.log(a.len/b.len);emit({kind:mode,ratio:Math.exp(Math.max(-.12,Math.min(.12,r))),center:metrics(baseline)});}
+    else if(mode==='twist'){const d=angle(b.angle-a.angle);emit({kind:mode,angle:Math.max(-.13,Math.min(.13,d))});}
+    previous=next;changed=false;return;
    }
    if(changed){
     if(mode==='pan')emit({kind:mode,dx:b.x-a.x,dy:b.y-a.y});
@@ -72,12 +83,13 @@
   }
   function up(id,p,now,cancel=false){
    if(!pointers.has(id))return;
-   if(!cancel){move(id,p);flush(now,true);}
+   if(!cancel){move(id,p);flush(now,false);}
+   if(pointers.size>=2)pairReleased=true;
    const click=!cancel&&pointers.size===1&&tapAllowed&&!mode&&dist(p,baseline[0])<5;
    pointers.delete(id);tapAllowed=false;rebase();
    if(click)emit({kind:'tap',x:p.x,y:p.y});
   }
-  function reset(){pointers.clear();tapAllowed=false;rebase();}
+  function reset(){pointers.clear();tapAllowed=false;pairReleased=false;rebase();}
   return {down,move,up,flush,reset,has:id=>pointers.has(id)};
  }
  const api={createInput,classify,metrics};
