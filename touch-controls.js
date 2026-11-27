@@ -4,17 +4,19 @@
  const angle=a=>Math.atan2(Math.sin(a),Math.cos(a));
  const metrics=p=>({x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2,len:Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y),angle:Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x)});
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+ // Smoothly increase screen-space pan gain as the camera approaches a rack.
+ const panGain=distance=>1.15+1.35*Math.max(0,Math.min(1,(12-distance)/9.2));
  function classify(base,next){
   const a=metrics(base),b=metrics(next);
   if(a.len<16||b.len<16)return null;
   const u={x:next[0].x-base[0].x,y:next[0].y-base[0].y},v={x:next[1].x-base[1].x,y:next[1].y-base[1].y};
   const m=Math.hypot(u.x,u.y),n=Math.hypot(v.x,v.y);
   const pan=dist(a,b),zoom=Math.abs(b.len-a.len)/2,turn=Math.abs(angle(b.angle-a.angle)),twist=turn*(a.len+b.len)/4;
-  const parallel=m>=3&&n>=3&&(u.x*v.x+u.y*v.y)/(m*n)>.8;
+  const parallel=m>=2&&n>=2&&(u.x*v.x+u.y*v.y)/(m*n)>.8;
   // Strong rotation can use one stationary finger as a pivot.
   if(turn>=.09&&twist>=4&&twist>=zoom*1.35&&twist>=pan*.75)return 'twist';
   // Pan requires both fingers to travel in the same direction.
-  if(parallel&&pan>=5&&zoom<=pan*.42&&twist<=pan*.42)return 'pan';
+  if(parallel&&pan>=3&&zoom<=pan*.42&&twist<=pan*.42)return 'pan';
   if(zoom>=4&&zoom>=twist*1.15&&zoom>=pan*.72&&turn<.24)return 'pinch';
   return null;
  }
@@ -64,12 +66,14 @@
     // Wait briefly for asynchronous touch updates, even if one finger
     // is stationary. No camera motion until a mode has been confirmed.
     const both=seen.size===2;
-    const wait=kind==='pan'?40:24;
+    const wait=kind==='pan'?0:24;
+    // A pan is only classified when both fingers move in parallel. Once both
+    // samples have arrived, start in this frame, without an extra timer.
     if(!ending&&(now-candidateAt<wait||(!both&&now-candidateAt<(kind==='pinch'?55:70))))return;
     mode=kind;candidate=null;
     // The first accepted frame is intentionally limited. Earlier ambiguous
     // movement must not become one sudden zoom/pan/rotation.
-    if(mode==='pan'){const d=dist(a,b),gain=d>0?Math.min(1,10/d):0;emit({kind:mode,dx:(b.x-a.x)*gain,dy:(b.y-a.y)*gain});}
+    if(mode==='pan'){const d=dist(a,b),gain=d>0?Math.min(1,18/d):0;emit({kind:mode,dx:(b.x-a.x)*gain,dy:(b.y-a.y)*gain});}
     else if(mode==='pinch'){const r=Math.log(a.len/b.len);emit({kind:mode,ratio:Math.exp(Math.max(-.12,Math.min(.12,r))),center:metrics(baseline)});}
     else if(mode==='twist'){const d=angle(b.angle-a.angle);emit({kind:mode,angle:Math.max(-.13,Math.min(.13,d))});}
     previous=next;changed=false;return;
@@ -93,6 +97,6 @@
   function reset(){pointers.clear();tapAllowed=false;pairReleased=false;rebase();}
   return {down,move,up,flush,reset,has:id=>pointers.has(id),active:()=>pointers.size>0};
  }
- const api={createInput,classify,metrics};
+ const api={createInput,classify,metrics,panGain};
  if(typeof module!=='undefined')module.exports=api;else root.WarehouseTouch=api;
 })(globalThis);

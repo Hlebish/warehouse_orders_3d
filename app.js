@@ -373,7 +373,7 @@ const touch=WarehouseTouch.createInput(action=>{
  stopFlight();
  if(action.kind==='orbit')orbitDrag(action.dx,action.dy);
  else if(action.kind==='mousePan')pan(action.dx,action.dy);
- else if(action.kind==='pan'){pan(action.dx*.8,action.dy*.8);constrainTouchTarget();}
+ else if(action.kind==='pan'){const gain=WarehouseTouch.panGain(cam.distance);pan(action.dx*gain,action.dy*gain);constrainTouchTarget();}
  else if(action.kind==='pinch'){
   const rect=canvas.getBoundingClientRect();
   pinchAt(cam,{x:action.center.x-rect.left,y:action.center.y-rect.top},canvas.clientWidth,canvas.clientHeight,Math.pow(action.ratio,.72));constrainTouchTarget();

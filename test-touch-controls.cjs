@@ -8,7 +8,7 @@ function fixture(){const events=[];return {events,c:createInput(e=>events.push(e
 for(const [kind,pair] of [['pan',rotate(0,1,20,8)],['pinch',rotate(0,1.5)],['twist',rotate(.4)],['twist',rotate(-.4)]]){
  const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);
  c.move(1,pair[0]);c.flush(0);assert.equal(events.length,0);
- c.move(2,pair[1]);c.flush(16);assert.equal(events.length,0);
+ c.move(2,pair[1]);c.flush(16);assert.equal(events.length,kind==='pan'?1:0);
  c.flush(100);assert.equal(events.length,1);assert.equal(events[0].kind,kind);
  c.move(1,p(10,30));c.move(2,p(70,40));c.flush(116);assert.equal(events[1].kind,kind);
  c.up(2,p(70,40),120);c.move(1,p(11,31));c.flush(130);assert.equal(events.length,2);
@@ -30,7 +30,7 @@ console.log('Touch controls passed');
  const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(-20,0));c.flush(0);c.up(1,p(-20,0),10);c.up(2,b[1],11);assert.equal(events.length,0);
 }
 {
- const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(20,0));c.move(2,p(100,0));c.flush(0);c.flush(90);assert.equal(events[0].kind,'pan');assert(Math.hypot(events[0].dx,events[0].dy)<=10.000001);
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(20,0));c.move(2,p(100,0));c.flush(0);c.flush(90);assert.equal(events[0].kind,'pan');assert(Math.hypot(events[0].dx,events[0].dy)<=18.000001);
 }
 
 {
@@ -52,3 +52,23 @@ for(const [first,second] of [['S3',null],[null,'S3'],['S2','S3'],[null,null]]){
 }
 
 {const {c}=fixture();assert(!c.active());c.down(1,p(0,0));assert(c.active());c.up(1,p(0,0),10);assert(!c.active());c.down(2,p(0,0));c.reset();assert(!c.active());}
+
+const {panGain}=require('./touch-controls.js');
+assert.equal(panGain(60),1.15);
+assert.equal(panGain(2.8),2.5);
+assert(panGain(5)>panGain(10));assert(panGain(10)>panGain(20));
+for(const [dx,dy] of [[3,0],[-3,0],[0,3],[0,-3],[3,3],[-3,-3],[12,4]]){
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);
+ c.move(1,p(b[0].x+dx,dy));c.flush(0);assert.equal(events.length,0);
+ c.move(2,p(b[1].x+dx,dy));c.flush(16);assert.equal(events.length,1);assert.equal(events[0].kind,'pan');
+ assert.equal(events[0].dx,dx);assert.equal(events[0].dy,dy);
+ c.move(1,p(b[0].x+2*dx,2*dy));c.move(2,p(b[1].x+2*dx,2*dy));c.flush(32);
+ assert.equal(events[1].kind,'pan');assert.equal(events[1].dx,dx);assert.equal(events[1].dy,dy);
+ c.up(1,p(b[0].x+2*dx,2*dy),35);c.up(2,p(b[1].x+2*dx,2*dy),36);assert(!events.some(e=>e.kind==='tap'));
+}
+// Tiny asynchronous single-finger moves cannot start a two-finger pan.
+{const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(-34,0));c.flush(0);c.flush(100);assert.equal(events.length,0);}
+// Explicit pinch and twist recognition thresholds remain unchanged.
+for(const [pair,kind] of [[rotate(0,1.4),'pinch'],[rotate(.4),'twist']]){
+ const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,pair[0]);c.move(2,pair[1]);c.flush(0);assert.equal(events.length,0);c.flush(32);assert.equal(events[0].kind,kind);
+}
