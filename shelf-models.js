@@ -1,6 +1,6 @@
 /* Visual shelf customizations only. Never changes inventory addresses. */
 (function(root){
-const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1]});
+const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1],bumper:[1]});
 function createShelfEditor(cells){
  const byId=new Map(cells.map(c=>[c.id,c]));
  const sameBay=(a,b)=>a&&b&&a.street===b.street&&a.side===b.side&&a.n===b.n;
@@ -167,6 +167,44 @@ function pistonStock(box,b,base,side){
   }
  }
 }
+// White wrapped bumper covers lie flat, parallel, with curved end returns.
+// Use a closed, bevelled envelope rather than intersecting rectangular boxes.
+function bumperStock(quad,b,base,side){
+ const count=4,pitch=(b.d-.22)/count;
+ const colors=['e8e9e7','f1f2ee','dedfdd','f5f5f0'];
+ const offset=shelfSeed(b,'bumper')%4;
+ for(let i=0;i<count;i++){
+  const variant=(i+offset)%4,z=b.z+(i-(count-1)/2)*pitch;
+  const width=(b.w-.15)*[1,.95,.91,.98][variant],height=[.20,.18,.22,.19][variant];
+  const depth=.16,curve=[.095,.08,.11,.09][variant];
+  const rings=[];
+  for(const t of [-1,-.86,-.63,-.32,0,.32,.63,.86,1]){
+   const end=Math.pow(Math.abs(t),3),x=b.x+side*t*width/2;
+   const center=z+curve*(end-.5),half=depth/2*(1-.35*end),y=base+.012+.015*end;
+   const top=y+height*(1-.25*end);
+   rings.push([[x,y,center-half*.72],[x,y+.025,center-half],[x,top-.025,center-half],[x,top,center-half*.7],[x,top,center+half*.7],[x,top-.025,center+half],[x,y+.025,center+half],[x,y,center+half*.72]]);
+  }
+  const tint=colors[variant];
+  for(let j=1;j<rings.length;j++)for(let k=0;k<8;k++){
+   const a=rings[j-1],c=rings[j],next=(k+1)%8;
+   quad([a[k],a[next],c[next],c[k]],tint,k===3?1:k===7?.76:k===0||k===6?.84:.94);
+  }
+  for(const r of [rings[0],rings.at(-1)]){
+   quad([r[0],r[1],r[2],r[3]],tint,.87);
+   quad([r[0],r[3],r[4],r[7]],tint,.87);
+   quad([r[7],r[4],r[5],r[6]],tint,.87);
+  }
+  // Narrow translucent packing bands and a printed product label on the top.
+  const topPoint=(t,v)=>{const end=Math.pow(Math.abs(t),3);return [b.x+side*t*width/2,base+.012+.015*end+height*(1-.25*end)+.001,z+curve*(end-.5)+v*depth/2*(1-.35*end)];};
+  // Match the piecewise linear surface between the existing mesh rings.
+  const surface=(t,v)=>{
+   const ts=[-1,-.86,-.63,-.32,0,.32,.63,.86,1];let j=ts.findIndex(n=>n>=t);j=Math.max(1,j);const a=ts[j-1],c=ts[j],k=(t-a)/(c-a),p=topPoint(a,v),q=topPoint(c,v);return p.map((n,index)=>n+(q[index]-n)*k);
+  };
+  for(const t of [-.60,.60])quad([surface(t-.022,-.68),surface(t+.022,-.68),surface(t+.022,.68),surface(t-.022,.68)],'d3d7d6',1);
+  quad([surface(.03,-.52),surface(.25,-.52),surface(.25,.52),surface(.03,.52)],'f9f8ed',1);
+  quad([surface(.07,-.34),surface(.21,-.34),surface(.21,-.12),surface(.07,-.12)],'696f73',1);
+ }
+}
 function drawShelf(box,quad,b,model,side,accent,showStock=true){
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
  if(model==='shelf')return;
@@ -174,6 +212,7 @@ function drawShelf(box,quad,b,model,side,accent,showStock=true){
  // Pistons are stored outside the address inventory: always show their assigned model.
  if(model==='piston'){pistonStock(box,b,base,side);return;}
  if(!showStock)return;
+ if(model==='bumper'){bumperStock(quad,b,base,side);return;}
  for(const pack of packingPlan(b,model)){
   if(model==='wing')wingPack(quad,b,base,side,pack);else hoodPack(quad,b,base,side,pack);
  }

@@ -219,17 +219,18 @@ function updateShelfEditor(){
  if(!editing)return;
  const entry=editIds.length?shelfIndex.get(editIds[0]):null;
  $('edit-address').textContent=editIds.length?editIds.join(' + '):'Выберите ячейку';
- $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты',piston:'Поршни'}[entry.model]):'Обычная ячейка';
+ $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты',piston:'Поршни',bumper:'Бамперы'}[entry.model]):'Обычная ячейка';
  $('edit-current').hidden=!editIds.length;
  $('edit-upper').disabled=!shelfEditor.extend(shelfDesign,editIds,1);
  $('edit-lower').disabled=!shelfEditor.extend(shelfDesign,editIds,-1);
  $('edit-shelf').disabled=!editIds.length;
  $('edit-wing').disabled=!shelfEditor.canUse(editIds,'wing');
  $('edit-piston').disabled=!shelfEditor.canUse(editIds,'piston');
+ $('edit-bumper').disabled=!shelfEditor.canUse(editIds,'bumper');
  $('edit-hood').disabled=!shelfEditor.canUse(editIds,'hood');
  $('edit-reset').disabled=!editIds.some(id=>shelfDesign.some(e=>e.ids.includes(id)));
  $('edit-focus').disabled=!editIds.length;
- $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'A — два уровня под капоты.':editIds.length===1?'Крылья и поршни: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
+ $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'A — два уровня под капоты.':editIds.length===1?'Крылья, поршни, бамперы: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
 }
 function setEditSelection(ids){
  editIds=ids.slice();selected=cells.find(c=>c.id===editIds[0])||null;
@@ -257,7 +258,7 @@ function toggleEditor(){
 $('edit-mode').onclick=toggleEditor;
 $('edit-upper').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,1);if(ids)setEditSelection(ids);};
 $('edit-lower').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,-1);if(ids)setEditSelection(ids);};
-for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
+for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-bumper','bumper'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
 $('edit-focus').onclick=()=>{if(!selected)return;const pose=cellFocusPose(selected);if(!pose)return;const group=editIds.map(id=>cells.find(c=>c.id===id));if(group.length===2){pose.target=[...pose.target];pose.target[1]=(group[0].y+group[1].y)/2;pose.distance=Math.max(pose.distance,3.6);}stopFlight();move(pose,450);};
 
 function select(c){clearRoute(false);selected=c;if(linkedOrder&&!manualOrigin)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}

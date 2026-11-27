@@ -123,3 +123,24 @@ for(let n=1;n<=10;n++){
  assert.equal(e.neighbor('S5-J-'+n,1),'S5-K-'+n);
  assert(e.canUse(['S5-F-'+n],'wing'));
 }
+
+ // Bumper assignment, persistence and geometry on all single-height addresses.
+ for(const c of cells){
+  const entry=e.apply([],[c.id],'bumper');
+  if(c.levelSpan===2){assert.equal(entry,null);continue;}
+  assert.deepEqual(e.validate(JSON.parse(JSON.stringify(entry))),entry);
+  const b=e.bounds(entry[0]);
+  for(const side of [-1,1]){
+   const snapshot=flag=>{const boxes=[],quads=[];drawShelf((...v)=>boxes.push(v),(...v)=>quads.push(v),b,'bumper',side,'53677a',flag);return {boxes,quads};};
+   const empty=snapshot(false),full=snapshot(true);
+   assert.equal(empty.boxes.length,9);assert.equal(empty.quads.length,0);
+   assert.equal(full.quads.length,4*(8*8+6+4));assert.deepEqual(full,snapshot(true));
+   const groups=Array.from({length:4},(_,i)=>full.quads.slice(i*74,(i+1)*74).flatMap(q=>q[0]));
+   for(let i=0;i<groups.length;i++){
+    const points=groups[i];
+    assert(points.every(p=>p.every(Number.isFinite)&&p[1]>=b.base-.001&&p[1]<=b.top+.001&&Math.abs(p[0]-b.x)<=b.w/2+.001&&Math.abs(p[2]-b.z)<=b.d/2+.001));
+    if(i)assert(Math.max(...groups[i-1].map(p=>p[2]))<Math.min(...points.map(p=>p[2])));
+   }
+  }
+ }
+ assert.equal(e.apply([],['S3-A-1','S3-B-1'],'bumper'),null);

@@ -139,3 +139,5 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 #edit-piston{border-color:#398591;background:#204452}#edit-reset{grid-column:1/-1}
 
 #article-fallback{font-size:10px;line-height:1.35;color:#e9d6a2;white-space:pre-line;overflow-wrap:anywhere;max-height:48px;overflow-y:auto;padding:3px 4px;border-left:2px solid #bda45e;background:#192b39;border-radius:3px;scrollbar-width:thin}#article-fallback[hidden]{display:none!important}
+
+#edit-bumper{border-color:#b5c1c9;background:#344451;color:#f4f4f1}
