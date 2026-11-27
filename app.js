@@ -166,16 +166,20 @@ function classifyPair(base,next){
  const m0=Math.hypot(x0,y0),m1=Math.hypot(x1,y1);
  const common=Math.hypot(x0+x1,y0+y1)/2;
  const before=pairMetrics(base),after=pairMetrics(next);
+ if(Math.max(m0,m1)<5||before.length<12||after.length<12)return null;
  const radial=Math.abs(after.length-before.length)/2;
- const twist=Math.abs(wrapAngle(after.angle-before.angle));
- const tangential=twist*Math.min(before.length,after.length)/2;
- const relative=Math.hypot(x1-x0,y1-y0)/2;
- if(Math.max(m0,m1)<5)return null;
- if(Math.min(m0,m1)<2&&Math.max(m0,m1)<18)return null;
- if(common>=4&&common>=relative*1.15)return 'pan';
- if(before.length>12&&after.length>12&&twist>=.075&&tangential>=4&&tangential>=radial*1.25&&tangential>=common*.8)return 'twist';
- if(radial>=4&&radial>=common*.8&&radial>=tangential*1.15)return 'pinch';
+ const angle=Math.abs(wrapAngle(after.angle-before.angle));
+ const tangential=angle*(before.length+after.length)/4;
+ const parallel=m0>2&&m1>2&&(x0*x1+y0*y1)/(m0*m1)>.88;
+ if(angle>=.085&&tangential>=3.5&&tangential>=radial*1.2&&tangential>=common*.65)return 'twist';
+ if(parallel&&common>=5&&radial<=common*.38&&tangential<=common*.38)return 'pan';
+ if(radial>=5&&radial>=tangential*1.45&&radial>=common*.8&&angle<.14)return 'pinch';
  return null;
+}
+function confirmPair(state,kind,now){
+ if(!kind){state.kind=null;state.since=now;return null;}
+ if(state.kind!==kind){state.kind=kind;state.since=now;return null;}
+ return now-state.since>=(kind==='twist'?32:64)?kind:null;
 }
 function planeOffset(state,point,width,height){
  const axes=cameraAxes(state.yaw,state.pitch);
@@ -187,21 +191,21 @@ function pinchAt(state,point,width,height,ratio){
  state.distance=clamp(state.distance*ratio,2.8,100);
  state.target=sub(anchor,planeOffset(state,point,width,height));
 }
-const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,pinchCenter=null,multiUsed=false;
+const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,pinchCenter=null,multiUsed=false,pairCandidate={kind:null,since:0};
 const pair=()=>[...pointers.values()].map(p=>({...p}));
-function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pinchCenter=null;pairDirty=false;}
+function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pinchCenter=null;pairDirty=false;pairCandidate={kind:null,since:0};}
 function localPoint(p){const rect=canvas.getBoundingClientRect();return {x:p.x-rect.left,y:p.y-rect.top};}
 function flushGesture(){
- if(!pairDirty||pointers.size!==2||!previousPair)return;
+ if((!pairDirty&&(gestureKind||!pairCandidate.kind))||pointers.size!==2||!previousPair)return;
  const next=pair();pairDirty=false;
  const prev=pairMetrics(previousPair),now=pairMetrics(next);
  if(!gestureKind){
-  gestureKind=classifyPair(previousPair,next);
+  gestureKind=confirmPair(pairCandidate,classifyPair(previousPair,next),performance.now());
   if(!gestureKind)return;
   if(gestureKind==='pinch')pinchCenter=localPoint(prev.center);
  }
  stopFlight();
- if(gestureKind==='pan')pan(now.center.x-prev.center.x,now.center.y-prev.center.y);
+ if(gestureKind==='pan')pan(prev.center.x-now.center.x,prev.center.y-now.center.y);
  else if(gestureKind==='pinch'&&prev.length>8&&now.length>8)pinchAt(cam,pinchCenter,canvas.clientWidth,canvas.clientHeight,prev.length/now.length);
  else if(gestureKind==='twist'&&prev.length>12&&now.length>12)cam.yaw=wrapAngle(cam.yaw+wrapAngle(now.angle-prev.angle));
  previousPair=next;dirty=true;
