@@ -12,6 +12,7 @@ buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAt
 let selected=null, hits=[], vertices=[], count=0, dirty=true, animation=null, flight=[], routePath=[], origin=null,walking=false,walkView=false, groundCount=0, ghostKeys=new Set(), ghostVertices=[], ghostCount=0;
 const mul=(a,k)=>a.map(x=>x*k),add=(a,b)=>a.map((x,i)=>x+b[i]),sub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),norm=a=>mul(a,1/Math.hypot(...a)),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+const HALF_FOV=65*Math.PI/360;
 const cam={target:[0,0,0],yaw:.24,pitch:.78,distance:47};
 const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
 let basis;
@@ -21,7 +22,7 @@ function cameraAxes(yaw,pitch){
  const cp=Math.abs(Math.abs(pitch)-Math.PI/2)<1e-9?0:Math.cos(pitch);
  return {right:[cy,0,-sy],up:[-sy*sp,cp,-cy*sp],forward:[-sy*cp,-sp,-cy*cp]};
 }
-function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(yaw,pitch);const eye=sub(target,mul(axes.forward,distance));return {eye,...axes,aspect:canvas.width/canvas.height,zoom:1/Math.tan(Math.PI/8)};}
+function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(yaw,pitch);const eye=sub(target,mul(axes.forward,distance));return {eye,...axes,aspect:canvas.width/canvas.height,zoom:1/Math.tan(HALF_FOV)};}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function box(x,y,z,w,h,d,hex){const a=w/2,b=h/2,e=d/2;const v=[[-a,-b,-e],[a,-b,-e],[a,b,-e],[-a,b,-e],[-a,-b,e],[a,-b,e],[a,b,e],[-a,b,e]].map(p=>add(p,[x,y,z]));const color=rgb(hex);for(const [ids,shade] of [[[0,1,2,3],.7],[[4,5,6,7],.93],[[0,4,7,3],.76],[[1,5,6,2],.84],[[3,2,6,7],1.15],[[0,1,5,4],.55]]){let c=color.map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...v[ids[i]],...c);}}
 function build(){vertices=[];ghostVertices=[];box(0,-.18,-.6,33,.32,24,'536172');
@@ -105,7 +106,7 @@ function runSearch(q){clearRoute(false);$('result-detail').hidden=true;$('result
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
 function updateActions(){const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&(!selected||!hasStreetOrigin());$('route-cell').textContent=walking?'Остановить':'Проложить путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
-function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(Math.PI/8));}
+function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
 function flyRoute(){
  if(walking){stopFlight();return;}
  if(!selected||!hasStreetOrigin())return;
@@ -134,77 +135,61 @@ $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
- const scale=2*cam.distance*Math.tan(Math.PI/8)/Math.max(1,canvas.clientHeight);
+ const scale=2*cam.distance*Math.tan(HALF_FOV)/Math.max(1,canvas.clientHeight);
  const {right,up}=cameraAxes(cam.yaw,cam.pitch);
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
-// Use the same screen plane as the renderer. Keep the point under the
-// previous touch midpoint under the new midpoint, including during zoom.
-function planeOffset(cameraState,point,width,height){
- const axes=cameraAxes(cameraState.yaw,cameraState.pitch);
- const scale=2*cameraState.distance*Math.tan(Math.PI/8)/Math.max(1,height);
- return add(mul(axes.right,(point.x-width/2)*scale),mul(axes.up,(height/2-point.y)*scale));
-}
-function anchoredGesture(cameraState,previous,next,width,height,ratio=1,turn=0,tilt=0){
- const anchor=add(cameraState.target,planeOffset(cameraState,previous,width,height));
- cameraState.distance=clamp(cameraState.distance*ratio,2.8,100);
- cameraState.yaw=wrapAngle(cameraState.yaw+turn);
- cameraState.pitch=clamp(cameraState.pitch+tilt,.00,Math.PI/2);
- cameraState.target=sub(anchor,planeOffset(cameraState,next,width,height));
-}
+// A gesture keeps its type until the fingers are lifted.
 function pairMetrics(p){
  const x=p[1].x-p[0].x,y=p[1].y-p[0].y;
- return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y),angle:Math.atan2(y,x)};
+ return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y)};
 }
-// Small changes in finger spacing and angle are ignored; deliberate
-// transforms can begin at any point in the same drag, without lifting.
-function gestureTransform(previous,next,reference){
- let ratio=1,turn=0;
- if(next.length<12||previous.length<12){reference.length=Math.max(12,next.length);reference.angle=next.angle;return {ratio,turn};}
- const dz=Math.log(next.length/reference.length),da=wrapAngle(next.angle-reference.angle);
- const zoomThreshold=.028,angleThreshold=.045;
- if(Math.abs(dz)>zoomThreshold){
-  const change=dz-Math.sign(dz)*zoomThreshold;
-  ratio=Math.exp(-change);reference.length*=Math.exp(change);
- }
- if(Math.abs(da)>angleThreshold){
-  turn=da-Math.sign(da)*angleThreshold;reference.angle=wrapAngle(reference.angle+turn);
- }
- return {ratio,turn};
+function classifyPair(base,next){
+ const x0=next[0].x-base[0].x,y0=next[0].y-base[0].y,x1=next[1].x-base[1].x,y1=next[1].y-base[1].y;
+ const m0=Math.hypot(x0,y0),m1=Math.hypot(x1,y1);
+ const common=Math.hypot(x0+x1,y0+y1)/2;
+ const radial=Math.abs(pairMetrics(next).length-pairMetrics(base).length)/2;
+ const relative=Math.hypot(x1-x0,y1-y0)/2;
+ if(Math.max(m0,m1)<5)return null;
+ if(Math.min(m0,m1)<2&&Math.max(m0,m1)<18)return null;
+ if(common>=4&&common>=relative*1.15)return 'pan';
+ if(radial>=4&&radial>=common*.8)return 'pinch';
+ return null;
 }
-const pointers=new Map();let start=null,moved=false,previousPair=null,transformReference=null,pairDirty=false,orbitMode=false;
+function planeOffset(state,point,width,height){
+ const axes=cameraAxes(state.yaw,state.pitch);
+ const scale=2*state.distance*Math.tan(HALF_FOV)/Math.max(1,height);
+ return add(mul(axes.right,(point.x-width/2)*scale),mul(axes.up,(height/2-point.y)*scale));
+}
+function pinchAt(state,point,width,height,ratio){
+ const anchor=add(state.target,planeOffset(state,point,width,height));
+ state.distance=clamp(state.distance*ratio,2.8,100);
+ state.target=sub(anchor,planeOffset(state,point,width,height));
+}
+const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,pinchCenter=null,multiUsed=false;
 const pair=()=>[...pointers.values()].map(p=>({...p}));
-function resetPair(){
- previousPair=pointers.size===2?pairMetrics(pair()):null;
- transformReference=previousPair?{length:Math.max(12,previousPair.length),angle:previousPair.angle}:null;
- pairDirty=false;
-}
+function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pinchCenter=null;pairDirty=false;}
 function localPoint(p){const rect=canvas.getBoundingClientRect();return {x:p.x-rect.left,y:p.y-rect.top};}
 function flushGesture(){
  if(!pairDirty||pointers.size!==2||!previousPair)return;
- const next=pairMetrics(pair());pairDirty=false;stopFlight();
- const {ratio,turn}=gestureTransform(previousPair,next,transformReference);
- const prev=localPoint(previousPair.center),now=localPoint(next.center);
- const w=canvas.clientWidth,h=canvas.clientHeight;
- if(orbitMode){
-  // Optional orbit/tilt, without changing the normal map drag behavior.
-  anchoredGesture(cam,prev,prev,w,h,ratio,turn-(now.x-prev.x)*.007,(now.y-prev.y)*.006);
- }else{
-  anchoredGesture(cam,prev,now,w,h,ratio,turn);
+ const next=pair();pairDirty=false;
+ const prev=pairMetrics(previousPair),now=pairMetrics(next);
+ if(!gestureKind){
+  gestureKind=classifyPair(previousPair,next);
+  if(!gestureKind)return;
+  if(gestureKind==='pinch')pinchCenter=localPoint(prev.center);
  }
+ stopFlight();
+ if(gestureKind==='pan')pan(now.center.x-prev.center.x,now.center.y-prev.center.y);
+ else if(prev.length>8&&now.length>8)pinchAt(cam,pinchCenter,canvas.clientWidth,canvas.clientHeight,prev.length/now.length);
  previousPair=next;dirty=true;
 }
-$('gesture-mode').onclick=()=>{
- flushGesture();orbitMode=!orbitMode;resetPair();
- $('gesture-mode').textContent=orbitMode?'Режим: наклон':'Режим: карта';
- $('gesture-mode').setAttribute('aria-pressed',String(orbitMode));
- $('hint').textContent=orbitMode?'Перетаскивание — поворот и наклон · щипок — зум':'Перетаскивание — сдвиг · щипок — зум · скручивание — поворот';
-};
 canvas.addEventListener('pointerdown',e=>{
  flushGesture();stopFlight();canvas.setPointerCapture(e.pointerId);
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button,type:e.pointerType};moved=false;}else moved=true;
+ if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;multiUsed=false;}
+ else {moved=true;multiUsed=true;}
  resetPair();
 });
 canvas.addEventListener('pointermove',e=>{
@@ -212,11 +197,11 @@ canvas.addEventListener('pointermove',e=>{
  const old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(pointers.size===2){pairDirty=true;moved=true;}
- else if(pointers.size===1&&start){
+ else if(pointers.size===1&&start&&!multiUsed){
   if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved=true;
   if(moved){
-   if((start.type==='touch'&&!orbitMode)||start.button===2||e.shiftKey)pan(dx,dy);
-   else {cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.00,Math.PI/2);}
+   if(start.button===2||e.shiftKey)pan(dx,dy);
+   else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,0,Math.PI/2);}
    dirty=true;
   }
  }
@@ -225,10 +210,9 @@ function finishPointer(e,cancel=false){
  if(!pointers.has(e.pointerId))return;
  if(!cancel&&pointers.size===2){pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});pairDirty=true;}
  if(!cancel)flushGesture();
- if(!cancel&&pointers.size===1&&!moved&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
+ if(!cancel&&pointers.size===1&&!moved&&!multiUsed&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
  pointers.delete(e.pointerId);resetPair();
- if(pointers.size===1){const p=pointers.values().next().value;start={x:p.x,y:p.y,button:0,type:e.pointerType};moved=true;}
- else if(!pointers.size){start=null;moved=false;}
+ if(!pointers.size){start=null;moved=false;multiUsed=false;}
  else moved=true;
 }
 canvas.addEventListener('pointerup',e=>finishPointer(e));
