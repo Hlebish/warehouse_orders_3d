@@ -145,20 +145,40 @@ function gestureDelta(prev,next){
  const before=Math.hypot(ax,ay),after=Math.hypot(bx,by);
  return {dx,dy,zoom:before>8&&after>8?before/after:1,twist:before>8&&after>8?Math.atan2(ax*by-ay*bx,ax*bx+ay*by):0};
 }
-const pointers=new Map();let start=null,moved=false,previousPair=null,pairDirty=false,orbitMode=false;
+function classifyGesture(base,next){
+ const dx0=next[0].x-base[0].x,dy0=next[0].y-base[0].y,dx1=next[1].x-base[1].x,dy1=next[1].y-base[1].y;
+ const m0=Math.hypot(dx0,dy0),m1=Math.hypot(dx1,dy1);
+ const common=Math.hypot(dx0+dx1,dy0+dy1)/2;
+ const relative=Math.hypot(dx1-dx0,dy1-dy0)/2;
+ if(Math.max(m0,m1)<5)return null;
+ // Wait for both touch updates before deciding; a stationary finger can
+ // still be used as a pivot for a deliberate pinch or twist.
+ if(Math.min(m0,m1)<2&&Math.max(m0,m1)<22)return null;
+ if(common>=5&&common>=relative*1.15)return 'translate';
+ if(relative>=5&&relative>=common*.95)return 'transform';
+ return null;
+}
+const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,orbitMode=false;
 const pair=()=>[...pointers.values()].map(p=>({...p}));
-function resetPair(){previousPair=pointers.size===2?pair():null;pairDirty=false;}
+function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pairDirty=false;}
 function flushGesture(){
  if(!pairDirty||pointers.size!==2||!previousPair)return;
- const next=pair(),g=gestureDelta(previousPair,next);previousPair=next;pairDirty=false;
+ const next=pair();pairDirty=false;
+ if(!gestureKind){gestureKind=classifyGesture(previousPair,next);if(!gestureKind)return;}
+ const g=gestureDelta(previousPair,next);previousPair=next;
  stopFlight();
- cam.distance=clamp(cam.distance*g.zoom,2.8,100);
- if(orbitMode){
-  cam.yaw=wrapAngle(cam.yaw+g.dx*.007+g.twist);
-  cam.pitch=clamp(cam.pitch-g.dy*.006,.09,Math.PI/2);
+ if(gestureKind==='translate'){
+  // Parallel finger motion cannot rotate or zoom the scene.
+  // Keep the viewing plane and camera distance fixed for the whole drag.
+  if(orbitMode){
+   cam.yaw=wrapAngle(cam.yaw+g.dx*.007);
+   cam.pitch=clamp(cam.pitch-g.dy*.006,.09,Math.PI/2);
+  }else{
+   pan(-g.dx,-g.dy);
+  }
  }else{
-  // Two-finger input moves the camera in the gesture direction.
-  pan(-g.dx,-g.dy);
+  // Relative finger motion is pinch/twist, without accidental translation.
+  cam.distance=clamp(cam.distance*g.zoom,2.8,100);
   cam.yaw=wrapAngle(cam.yaw+g.twist);
  }
  dirty=true;
