@@ -101,3 +101,5 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 
 /* Search chooser floats over the canvas; cell selection never resizes the stage. */
 #stage>#result-panel{position:absolute;z-index:6;top:92px;left:8px;right:auto;width:min(280px,calc(100% - 16px));max-height:26%;margin:0;padding:5px 7px;background:#172330f5;box-shadow:0 4px 12px #0004;overflow:auto}.search-result-head{display:flex;align-items:center;justify-content:space-between;gap:5px}.search-result-head #clear-selection{min-height:25px;padding:2px 8px}.search-result-head #result-count{font-size:11px}#stage>#result-panel #results{margin-top:4px}#stage>#result-panel #message{font-size:11px}#route-overlay #clear-route{font-size:11px;min-height:25px;padding:3px 6px;pointer-events:auto}@media(max-height:450px){#stage>#result-panel{top:42px;max-height:35%}}
+
+.landmark-tag{pointer-events:none;z-index:1;font-size:11px;font-weight:600;line-height:1.15;padding:5px 7px;border-color:#8797a8;background:#243746e8;color:#e1e9f0;white-space:nowrap}@media(max-width:760px){.landmark-tag{font-size:10px;padding:4px 6px}}

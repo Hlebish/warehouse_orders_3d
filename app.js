@@ -25,9 +25,35 @@ function cameraAxes(yaw,pitch){
 function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(yaw,pitch);const eye=sub(target,mul(axes.forward,distance));return {eye,...axes,aspect:canvas.width/canvas.height,zoom:1/Math.tan(HALF_FOV)};}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function box(x,y,z,w,h,d,hex){const a=w/2,b=h/2,e=d/2;const v=[[-a,-b,-e],[a,-b,-e],[a,b,-e],[-a,b,-e],[-a,-b,e],[a,-b,e],[a,b,e],[-a,b,e]].map(p=>add(p,[x,y,z]));const color=rgb(hex);for(const [ids,shade] of [[[0,1,2,3],.7],[[4,5,6,7],.93],[[0,4,7,3],.76],[[1,5,6,2],.84],[[3,2,6,7],1.15],[[0,1,5,4],.55]]){let c=color.map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...v[ids[i]],...c);}}
+// Orientation landmarks only: approximate geometry, no extra stock cells.
+function buildLandmarks(){
+ // Open north end: show adjoining warehouse floor continuing beyond our racks.
+ box(0,-.18,-16.6,33,.32,8,'465664');
+ // Side walls continue in the same direction, without a closing end wall.
+ for(const x of [-16.4,16.4])box(x,.22,-16.6,.23,.5,8,'8995a0');
+ // Subtle boundary stripe and longitudinal guide lines on the adjoining floor.
+ box(0,.003,-12.6,32.7,.018,.13,'9eacb6');
+ for(const {x} of streets)box(x,.006,-16.6,.07,.02,8,'788994');
+ // Staircase at the south end of S5. It sits outside the addressable floor.
+ const x=12.4,z=11.4,steps=7,rise=.20,run=.32,width=1.65;
+ box(x,-.18,z+1.12,2.25,.32,2.5,'536172');
+ for(let i=0;i<steps;i++){
+  const height=(i+1)*rise;
+  box(x,height/2,z+(i+.5)*run,width,height,run,'a1adb8');
+  box(x,height+.006,z+(i+1)*run-.04,width,.012,.055,'d3dce2');
+ }
+ for(const side of [-1,1]){
+  const xx=x+side*(width/2+.065);
+  for(let i=0;i<steps;i+=2){
+   const height=(i+1)*rise;
+   box(xx,height+.43,z+(i+.5)*run,.065,.86,.065,'8995a0');
+  }
+ }
+}
 function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
- // low perimeter walls, leaving an opening at the ramp
- box(0,.22,-12.4,33,.5,.23,'8995a0');box(16.4,.22,-.6,.23,.5,24,'8995a0');box(-16.4,.22,-7.3,.23,.5,10,'8995a0');box(-16.4,.22,7.8,.23,.5,7.2,'8995a0');
+ buildLandmarks();
+ // low perimeter walls, leaving an opening at the ramp and adjoining warehouse
+ box(16.4,.22,-.6,.23,.5,24,'8995a0');box(-16.4,.22,-7.3,.23,.5,10,'8995a0');box(-16.4,.22,7.8,.23,.5,7.2,'8995a0');
  // central cross aisle, access ramp and photo zone
  box(0,.003,2.95,32,.018,3.66,'71808b');box(-15.3,.04,3.0,2,.07,2.5,'72916c');box(-14.2,.025,8.7,2.6,.04,3.7,'6c8198');
  for(const {x} of streets){box(x,.006,-.7,.07,.02,22,'a0a9a8');}
@@ -47,6 +73,11 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  dirty=true;
 }
 const markers=points.map(p=>({point:p,pos:[p.x,p.id==='photo'?.5:1.0,p.z],el:tag(p.name,p)}));const selectionTag=tag('');selectionTag.classList.add('active');selectionTag.hidden=true;
+const landmarkLabels=[
+ {pos:[0,.1,-16.6],el:tag('↑ Продолжение склада')},
+ {pos:[12.4,1.5,12.65],el:tag('Лестница')}
+];
+for(const m of landmarkLabels){m.el.classList.add('landmark-tag');m.el.hidden=true;}
 const articlePopup=document.createElement('div');articlePopup.className='cell-article-popup';articlePopup.hidden=true;articlePopup.setAttribute('aria-label','Артикулы выбранной ячейки');labels.appendChild(articlePopup);let popupRows=0;
 function renderArticlePopup(){
  articlePopup.replaceChildren();popupRows=0;if(!selected||!inventoryReady){articlePopup.hidden=true;return;}
@@ -91,7 +122,7 @@ for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animat
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
 if(u>=1){animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
- const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;articlePopup.hidden=true;}}
+ const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}for(const m of landmarkLabels)place(m.el,m.pos);if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;articlePopup.hidden=true;}}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
