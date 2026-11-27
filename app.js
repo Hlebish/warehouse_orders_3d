@@ -158,7 +158,7 @@ function setWalkSpeed(value){
 function startWalkStep(step){routeStep++;const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.phase==='walk'?step.duration/walkSpeed:step.duration);animation.phase=step.phase;animation.baseDuration=step.duration;animation.reducedMotion=animation.duration===1;animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
 function overview(top=false){stopFlight();walkView=false;const fit=wideStreetPose({x:0,z:-.6});move(top?fit:{target:[0,0,-.5],yaw:.24,pitch:.78,distance:Math.max(47,fit.distance)});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];routeArrived=false;routeStep=0;routeSteps=0;if(rebuild)build();updateNavigationMarkers();updateActions();}
-let inventoryReady=false,lastQuery='',linkedOrder=null,resultsExpanded=true,manualOrigin=false;
+let inventoryReady=false,lastQuery='',linkedOrder=null,resultsExpanded=true,manualOrigin=false,lastClearedCell=null;
 function linkedHits(){return linkedCellMatches(linkedOrder,inventoryReady);}
 function focusOrderStreet(cell){
  const start=orderStreetStart(cell,points,route,streets);
@@ -216,6 +216,9 @@ function updateActions(){
  // Direct taps and single matches need only the anchored cell popup.
  // Multiple search addresses or a failed search use an out-of-flow overlay.
  updateSearchChooser();
+ $('restore-cell').hidden=!!selected||!lastClearedCell||!!lastQuery;
+ $('restore-cell').textContent=lastClearedCell?'↶ '+lastClearedCell:'';
+ $('restore-cell').setAttribute('aria-label','Вернуть выделение '+(lastClearedCell||''));
  $('focus-cell').hidden=!selected;
  $('focus-cell').disabled=walking;
  $('route-cell').disabled=!walking&&!selected;
@@ -241,7 +244,15 @@ function flyRoute(){
 }
 function updateNavigationMarkers(){for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));}
 function choosePoint(p){manualOrigin=true;clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();updateNavigationMarkers();updateActions();move(wideStreetPose(p),650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
-function clearSelection(){resultsExpanded=true;manualOrigin=false;clearRoute(false);selected=null;renderArticlePopup();selectionTag.hidden=true;hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('search').value='';updateSearchReset();$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();}
+function clearSelection(){if(selected)lastClearedCell=selected.id;resultsExpanded=true;manualOrigin=false;clearRoute(false);selected=null;renderArticlePopup();selectionTag.hidden=true;hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('search').value='';updateSearchReset();$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();}
+function restoreLastCell(){
+ if(selected||!lastClearedCell||lastQuery)return;
+ const cell=cells.find(c=>c.id===lastClearedCell);if(!cell)return;
+ // Restore the physical address only, never a stale article match or old route.
+ linkedOrder=null;hits=[];lastQuery='';resultsExpanded=true;manualOrigin=false;
+ $('search').value='';updateSearchReset();renderMatches();select(cell);
+}
+$('restore-cell').onclick=restoreLastCell;
 $('clear-selection').onclick=clearSelection;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};
 function updateSearchReset(){$('reset-search').hidden=!$('search').value;}
 $('search').addEventListener('input',updateSearchReset);
