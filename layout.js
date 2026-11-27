@@ -154,8 +154,10 @@ function orderStreetStart(cell,points,route,streets){
 // Fit the whole warehouse envelope while staying directly over the street.
 function streetOverviewPose(point,aspect,halfFov){
  const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.58;
- const x=Math.max(Math.abs(-16.5-point.x),Math.abs(16.5-point.x));
- const z=Math.max(Math.abs(-12.6-point.z),Math.abs(11.4-point.z));
+ // Use the same worst-case framing for all five streets. Only the
+ // horizontal target changes when switching streets.
+ const x=16.5+Math.max(...streets.map(s=>Math.abs(s.x)));
+ const z=Math.max(Math.abs(-12.6-3),Math.abs(11.4-3));
  const distance=4.6+Math.max(x/(ratio*tan*margin),z/(tan*margin));
  return {target:[point.x,0,point.z],yaw:0,pitch:Math.PI/2,distance};
 }
