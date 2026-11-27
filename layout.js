@@ -21,5 +21,17 @@ for(let s=1;s<=5;s++){
 }
 function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*([1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+m[3]:null;}
 function search(value){const q=String(value).trim().toUpperCase();if(!q)return [];const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);return cells.filter(c=>c.items.some(item=>item.toUpperCase().includes(q)));}
-const layout={cells,racks,streets,search,normalizeAddress}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function navigation(streets){
+ const points=[{id:"entry",name:"Вход",x:-15,z:3},{id:"photo",name:"Фотозона",x:-14.2,z:8.7},...streets.map(s=>({id:s.id,name:s.id,x:s.x,z:3}))];
+ function route(origin,cell){
+  const aisle=streets.find(s=>s.id===cell.street);
+  if(!origin||!aisle)return [];
+  const result=[];
+  function push(x,z){if(!result.length||result[result.length-1].x!==x||result[result.length-1].z!==z)result.push({x,z});}
+  push(origin.x,origin.z);push(origin.x,3);push(aisle.x,3);push(aisle.x,cell.z);
+  return result;
+ }
+ return {points,route};
+}
+const layout={cells,racks,streets,search,normalizeAddress,...navigation(streets)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
