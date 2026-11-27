@@ -97,12 +97,12 @@ function choosePoint(p){clearRoute(false);origin=p;build();drawMini();updateActi
 $('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('example').onclick=()=>{$('search').value='S3, K7';runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
-// Drag on the horizontal warehouse plane. Pixel scale follows camera zoom.
+// Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
  const scale=2*cam.distance*Math.tan(Math.PI/8)/Math.max(1,canvas.clientHeight);
  const right=[Math.cos(cam.yaw),0,-Math.sin(cam.yaw)];
- const forward=[-Math.sin(cam.yaw),0,-Math.cos(cam.yaw)];
- cam.target=add(cam.target,add(mul(right,-dx*scale),mul(forward,dy*scale/Math.max(.35,Math.sin(cam.pitch)))));
+ const up=[-Math.sin(cam.yaw)*Math.sin(cam.pitch),Math.cos(cam.pitch),-Math.cos(cam.yaw)*Math.sin(cam.pitch)];
+ cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
 const pointers=new Map();let start=null,moved=false;canvas.addEventListener('pointerdown',e=>{stopFlight();canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;}else moved=true;});
