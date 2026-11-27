@@ -151,5 +151,14 @@ function orderStreetStart(cell,points,route,streets){
  return plan.length?{origin,pose:plan[0].pose}:null;
 }
 
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+// Fit the whole warehouse envelope while staying directly over the street.
+function streetOverviewPose(point,aspect,halfFov){
+ const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.84;
+ const x=Math.max(Math.abs(-16.5-point.x),Math.abs(16.5-point.x));
+ const z=Math.max(Math.abs(-12.6-point.z),Math.abs(11.4-point.z));
+ const distance=4.6+Math.max(x/(ratio*tan*margin),z/(tan*margin));
+ return {target:[point.x,0,point.z],yaw:0,pitch:Math.PI/2,distance};
+}
+
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

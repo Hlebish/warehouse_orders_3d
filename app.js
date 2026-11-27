@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -100,10 +100,8 @@ function linkedHits(){return linkedOrder.addresses.length?linkedOrder.addresses:
 function focusOrderStreet(cell){
  const start=orderStreetStart(cell,points,route,streets);
  if(!start)return;
- stopFlight();origin=start.origin;walkView=true;
- const p=start.pose;
- // Start exactly above the selected street's navigation point, not the warehouse center.
- Object.assign(cam,{target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance});
+ stopFlight();origin=start.origin;walkView=false;
+ Object.assign(cam,wideStreetPose(origin));
  basis=camera();dirty=true;
 }
 function renderCellDetail(){
@@ -132,6 +130,7 @@ function runSearch(q){linkedOrder=null;clearRoute(false);$('result-detail').hidd
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
 function updateActions(){$('route-origin').value=hasStreetOrigin()?origin.id:'';$('route-origin').disabled=walking;const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&!selected;$('route-cell').textContent=walking?'■ Остановить':'▶ В путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
+function wideStreetPose(p){return streetOverviewPose(p,canvas.clientWidth/Math.max(1,canvas.clientHeight),HALF_FOV);}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
 function flyRoute(){
  if(walking){stopFlight();return;}
@@ -157,10 +156,10 @@ if(selected){const [x,y]=miniXY(selected.x,selected.z);shape('rect',{x:x-7,y:y-8
 cameraDot=shape('circle',{cx:0,cy:0,r:4.5,fill:'#fff',stroke:'#131d27','stroke-width':1.5});updateCameraDot();
 for(const p of points)pinButtons.get(p.id).setAttribute('aria-pressed',String(p.id===origin?.id));for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));$('mini-origin').textContent='Откуда: '+(hasStreetOrigin()?origin.name:'выберите S1–S5');$('origin-info').textContent=hasStreetOrigin()?'Откуда: '+origin.name:'Старт: S1–S5';}
 function updateCameraDot(){if(!cameraDot)return;const p=walkView&&basis?basis.eye:cam.target;const [x,y]=miniXY(p[0],p[2]);cameraDot.setAttribute('cx',clamp(x,5,335));cameraDot.setAttribute('cy',clamp(y,5,245));}
-function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();drawMini();updateActions();move({target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
+function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();drawMini();updateActions();move(hasStreetOrigin()?wideStreetPose(p):{target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
 $('result-expand').onclick=()=>{const open=$('result-detail').hidden;$('result-detail').hidden=!open;$('result-expand').setAttribute('aria-expanded',String(open));renderCellDetail();};
 $('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';linkedOrder=null;$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
-$('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
+$('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,Math.max(100,cam.distance,wideStreetPose({x:12.4,z:3}).distance*1.25));dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
@@ -201,7 +200,7 @@ function planeOffset(state,point,width,height){
 }
 function pinchAt(state,point,width,height,ratio){
  const anchor=add(state.target,planeOffset(state,point,width,height));
- state.distance=clamp(state.distance*ratio,2.8,100);
+ state.distance=clamp(state.distance*ratio,2.8,Math.max(100,state.distance,wideStreetPose({x:12.4,z:3}).distance*1.25));
  state.target=sub(anchor,planeOffset(state,point,width,height));
 }
 const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,pinchCenter=null,multiUsed=false,pairCandidate={kind:null,since:0};
