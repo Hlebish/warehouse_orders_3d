@@ -172,7 +172,7 @@ function updateNavigationMarkers(){for(const m of markers)m.el.setAttribute('ari
 function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();updateNavigationMarkers();updateActions();move(wideStreetPose(p),650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
 function clearSelection(){clearRoute(false);selected=null;renderArticlePopup();selectionTag.hidden=true;hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();}
 $('clear-selection').onclick=clearSelection;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};
-$('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,Math.max(100,wideStreetPose({x:12.4,z:3}).distance*1.25));dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
+$('search-form').onsubmit=e=>{e.preventDefault();releaseSearchFocus();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,Math.max(100,wideStreetPose({x:12.4,z:3}).distance*1.25));dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
 function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}else if(selected||lastQuery||routePath.length)clearSelection();}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
@@ -218,6 +218,14 @@ function flushGesture(){touch.flush(performance.now());}
 const pointer=e=>({x:e.clientX,y:e.clientY,button:e.button,type:e.pointerType,shift:e.shiftKey});
 // Canvas and navigation labels share a pointer surface. The original
 // label is only activated on a confirmed single tap, never during a pinch.
+// PreventDefault in the camera gesture handler suppresses native focus changes.
+function releaseSearchFocus(){
+ const input=$('search');
+ if(document.activeElement===input)input.blur();
+}
+// Dismiss the keyboard even when touching navigation controls on the map,
+// without consuming the first pointer or clearing the query/selected cell.
+stage.addEventListener('pointerdown',releaseSearchFocus,{capture:true});
 stage.addEventListener('pointerdown',e=>{
  const pin=e.target.closest?.('.scene-pin');
  if(e.target!==canvas&&!pin)return;
