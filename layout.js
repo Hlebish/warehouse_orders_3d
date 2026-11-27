@@ -153,7 +153,7 @@ function orderStreetStart(cell,points,route,streets){
 
 // Fit the whole warehouse envelope while staying directly over the street.
 function streetOverviewPose(point,aspect,halfFov){
- const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.84;
+ const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.58;
  const x=Math.max(Math.abs(-16.5-point.x),Math.abs(16.5-point.x));
  const z=Math.max(Math.abs(-12.6-point.z),Math.abs(11.4-point.z));
  const distance=4.6+Math.max(x/(ratio*tan*margin),z/(tan*margin));
