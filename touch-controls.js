@@ -15,7 +15,7 @@
   if(turn>=.09&&twist>=4&&twist>=zoom*1.35&&twist>=pan*.75)return 'twist';
   // Pan requires both fingers to travel in the same direction.
   if(parallel&&pan>=5&&zoom<=pan*.42&&twist<=pan*.42)return 'pan';
-  if(zoom>=5&&zoom>=twist*1.4&&zoom>=pan*.85&&turn<.14)return 'pinch';
+  if(zoom>=4&&zoom>=twist*1.15&&zoom>=pan*.72&&turn<.24)return 'pinch';
   return null;
  }
  function createInput(emit){
@@ -64,8 +64,8 @@
     // Wait briefly for asynchronous touch updates, even if one finger
     // is stationary. No camera motion until a mode has been confirmed.
     const both=seen.size===2;
-    const wait=kind==='twist'?24:40;
-    if(!ending&&(now-candidateAt<wait||(!both&&now-candidateAt<70)))return;
+    const wait=kind==='pan'?40:24;
+    if(!ending&&(now-candidateAt<wait||(!both&&now-candidateAt<(kind==='pinch'?55:70))))return;
     mode=kind;candidate=null;
     // The first accepted frame is intentionally limited. Earlier ambiguous
     // movement must not become one sudden zoom/pan/rotation.
@@ -86,8 +86,9 @@
    if(!cancel){move(id,p);flush(now,false);}
    if(pointers.size>=2)pairReleased=true;
    const click=!cancel&&pointers.size===1&&tapAllowed&&!mode&&dist(p,baseline[0])<5;
+   const pointId=baseline[0]?.pointId||null;
    pointers.delete(id);tapAllowed=false;rebase();
-   if(click)emit({kind:'tap',x:p.x,y:p.y});
+   if(click)emit({kind:'tap',x:p.x,y:p.y,pointId});
   }
   function reset(){pointers.clear();tapAllowed=false;pairReleased=false;rebase();}
   return {down,move,up,flush,reset,has:id=>pointers.has(id)};

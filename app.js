@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const {cells,racks,streets,search,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
-const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
+const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels'), stage=$('stage');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
 const vsrc='attribute vec3 p;attribute vec3 c;uniform vec3 eye,right,up,forward;uniform float aspect,zoom;varying vec3 color;void main(){vec3 v=p-eye;float d=dot(v,forward);gl_Position=vec4(dot(v,right)*zoom/aspect,dot(v,up)*zoom,1.00040008*d-.40008002,d);color=c;}';
@@ -47,7 +47,7 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  dirty=true;
 }
 const markers=points.map(p=>({point:p,pos:[p.x,p.id==='photo'?.5:1.0,p.z],el:tag(p.name,p)}));const selectionTag=tag('');selectionTag.classList.add('active');selectionTag.hidden=true;
-function tag(text,point){const el=document.createElement(point?'button':'span');el.className=point?'tag scene-pin':'tag';el.textContent=text;if(point){el.type='button';el.setAttribute('aria-label','Перейти к точке '+point.name);el.setAttribute('aria-pressed',String(point.id===origin?.id));el.onclick=()=>choosePoint(point);}labels.appendChild(el);return el;}
+function tag(text,point){const el=document.createElement(point?'button':'span');el.className=point?'tag scene-pin':'tag';el.textContent=text;if(point){el.type='button';el.setAttribute('aria-label','Перейти к точке '+point.name);el.setAttribute('aria-pressed',String(point.id===origin?.id));el.dataset.pointId=point.id;el.onclick=e=>{if(e.detail===0)choosePoint(point);};}labels.appendChild(el);return el;}
 function project(pos){let v=sub(pos,basis.eye),d=dot(v,basis.forward);if(d<.3)return null;let x=dot(v,basis.right)*basis.zoom/(basis.aspect*d),y=dot(v,basis.up)*basis.zoom/d;return [(x+1)*canvas.clientWidth/2,(1-y)*canvas.clientHeight/2];}
 function place(el,p){const xy=project(p);el.hidden=!xy||xy[0]<0||xy[1]<0||xy[0]>canvas.clientWidth||xy[1]>canvas.clientHeight;if(!el.hidden){el.style.left=xy[0]+'px';el.style.top=xy[1]+'px';}}
 function drawCanvas(w,h){
@@ -180,11 +180,11 @@ function orbitDrag(dx,dy){
  cam.pitch=clamp(cam.pitch+dy*speed*.85,0,Math.PI/2);dirty=true;
 }
 const touch=WarehouseTouch.createInput(action=>{
- if(action.kind==='tap'){if(basis)rayPick(action.x,action.y);return;}
+ if(action.kind==='tap'){const point=points.find(p=>p.id===action.pointId);if(point)choosePoint(point);else if(basis)rayPick(action.x,action.y);return;}
  stopFlight();
  if(action.kind==='orbit')orbitDrag(action.dx,action.dy);
  else if(action.kind==='mousePan')pan(action.dx,action.dy);
- else if(action.kind==='pan'){pan(-action.dx*.8,-action.dy*.8);constrainTouchTarget();}
+ else if(action.kind==='pan'){pan(action.dx*.8,action.dy*.8);constrainTouchTarget();}
  else if(action.kind==='pinch'){
   const rect=canvas.getBoundingClientRect();
   pinchAt(cam,{x:action.center.x-rect.left,y:action.center.y-rect.top},canvas.clientWidth,canvas.clientHeight,Math.pow(action.ratio,.72));constrainTouchTarget();
@@ -193,21 +193,26 @@ const touch=WarehouseTouch.createInput(action=>{
 });
 function flushGesture(){touch.flush(performance.now());}
 const pointer=e=>({x:e.clientX,y:e.clientY,button:e.button,type:e.pointerType,shift:e.shiftKey});
-canvas.addEventListener('pointerdown',e=>{
+// Canvas and navigation labels share a pointer surface. The original
+// label is only activated on a confirmed single tap, never during a pinch.
+stage.addEventListener('pointerdown',e=>{
+ const pin=e.target.closest?.('.scene-pin');
+ if(e.target!==canvas&&!pin)return;
  if(e.pointerType==='mouse'&&e.button!==0&&e.button!==2)return;
+ e.preventDefault();
  flushGesture();stopFlight();
- touch.down(e.pointerId,pointer(e));
- try{canvas.setPointerCapture(e.pointerId);}catch{}
+ touch.down(e.pointerId,{...pointer(e),pointId:pin?.dataset.pointId||null});
+ try{stage.setPointerCapture(e.pointerId);}catch{}
 });
-canvas.addEventListener('pointermove',e=>{if(touch.has(e.pointerId))touch.move(e.pointerId,{x:e.clientX,y:e.clientY});});
+stage.addEventListener('pointermove',e=>{if(touch.has(e.pointerId))touch.move(e.pointerId,{x:e.clientX,y:e.clientY});});
 function finishPointer(e,cancel=false){touch.up(e.pointerId,{x:e.clientX,y:e.clientY},performance.now(),cancel);}
-canvas.addEventListener('pointerup',e=>finishPointer(e));
-canvas.addEventListener('pointercancel',e=>finishPointer(e,true));
-canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));
+stage.addEventListener('pointerup',e=>finishPointer(e));
+stage.addEventListener('pointercancel',e=>finishPointer(e,true));
+stage.addEventListener('lostpointercapture',e=>finishPointer(e,true));
 window.addEventListener('blur',()=>touch.reset());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)touch.reset();});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
+stage.addEventListener('wheel',e=>{if(e.target!==canvas&&!e.target.closest?.('.scene-pin'))return;e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
 $('walk-speed').value=String(walkSpeed);$('walk-speed').onchange=e=>setWalkSpeed(e.target.value);
 $('route-origin').onchange=e=>{const point=points.find(p=>p.id===e.target.value&&streets.some(s=>s.id===p.id));if(point)choosePoint(point);else{clearRoute(false);origin=null;try{localStorage.removeItem('warehouse3d.origin');}catch{}build();updateNavigationMarkers();updateActions();}};
 try{const saved=localStorage.getItem('warehouse3d.origin');origin=points.find(p=>p.id===saved&&streets.some(s=>s.id===p.id))||null;}catch{}

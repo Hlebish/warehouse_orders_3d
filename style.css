@@ -93,3 +93,5 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 #gl{touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;-webkit-tap-highlight-color:transparent}
 
 #return-order{flex:0 0 auto;min-height:39px;padding:8px 12px;font-size:13px;font-weight:700;background:#253d50;border-color:#668da6;color:#eaf5ff}@media(max-width:760px){.topbar #return-order{order:-2;min-height:34px;font-size:12px}.topbar:has(#return-order:not([hidden])) form{flex:1 1 170px;width:auto}.topbar:has(#return-order:not([hidden])) .syncbar{flex:1 1 65%}}
+/* Canvas and scene labels must share the same native touch policy. */
+#gl,#labels,#labels .scene-pin{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}

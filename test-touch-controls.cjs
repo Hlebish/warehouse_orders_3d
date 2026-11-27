@@ -32,3 +32,21 @@ console.log('Touch controls passed');
 {
  const {c,events}=fixture();c.down(1,b[0]);c.down(2,b[1]);c.move(1,p(20,0));c.move(2,p(100,0));c.flush(0);c.flush(90);assert.equal(events[0].kind,'pan');assert(Math.hypot(events[0].dx,events[0].dy)<=10.000001);
 }
+
+{
+ const {c,events}=fixture();
+ c.down(1,{...p(100,100),pointId:'S3'});c.up(1,p(101,100),20);
+ assert.equal(events.length,1);assert.equal(events[0].kind,'tap');assert.equal(events[0].pointId,'S3');
+}
+for(const [first,second] of [['S3',null],[null,'S3'],['S2','S3'],[null,null]]){
+ const {c,events}=fixture();c.down(1,{...b[0],pointId:first});c.down(2,{...b[1],pointId:second});
+ c.move(1,p(-53,-3));c.move(2,p(56,6));c.flush(0);c.flush(32);
+ assert.equal(events[0].kind,'pinch');assert(events[0].ratio<1);
+ c.move(1,p(-65,-3));c.move(2,p(68,7));c.flush(48);
+ assert.equal(events[1].kind,'pinch');c.up(1,p(-65,-3),50);c.up(2,p(68,7),51);
+ assert(!events.some(e=>e.kind==='tap'));
+}
+{
+ const {c,events}=fixture();c.down(1,{...b[0],pointId:'S4'});c.move(1,p(-20,8));c.flush(20);c.up(1,p(-20,8),25);
+ assert.equal(events[0].kind,'orbit');assert(!events.some(e=>e.kind==='tap'));
+}
