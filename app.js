@@ -139,60 +139,72 @@ function pan(dx,dy){
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
-function gestureDelta(prev,next){
- const dx=(next[0].x+next[1].x-prev[0].x-prev[1].x)/2,dy=(next[0].y+next[1].y-prev[0].y-prev[1].y)/2;
- const ax=prev[1].x-prev[0].x,ay=prev[1].y-prev[0].y,bx=next[1].x-next[0].x,by=next[1].y-next[0].y;
- const before=Math.hypot(ax,ay),after=Math.hypot(bx,by);
- return {dx,dy,zoom:before>8&&after>8?before/after:1,twist:before>8&&after>8?Math.atan2(ax*by-ay*bx,ax*bx+ay*by):0};
+// Use the same screen plane as the renderer. Keep the point under the
+// previous touch midpoint under the new midpoint, including during zoom.
+function planeOffset(cameraState,point,width,height){
+ const axes=cameraAxes(cameraState.yaw,cameraState.pitch);
+ const scale=2*cameraState.distance*Math.tan(Math.PI/8)/Math.max(1,height);
+ return add(mul(axes.right,(point.x-width/2)*scale),mul(axes.up,(height/2-point.y)*scale));
 }
-function classifyGesture(base,next){
- const dx0=next[0].x-base[0].x,dy0=next[0].y-base[0].y,dx1=next[1].x-base[1].x,dy1=next[1].y-base[1].y;
- const m0=Math.hypot(dx0,dy0),m1=Math.hypot(dx1,dy1);
- const common=Math.hypot(dx0+dx1,dy0+dy1)/2;
- const relative=Math.hypot(dx1-dx0,dy1-dy0)/2;
- if(Math.max(m0,m1)<5)return null;
- // Wait for both touch updates before deciding; a stationary finger can
- // still be used as a pivot for a deliberate pinch or twist.
- if(Math.min(m0,m1)<2&&Math.max(m0,m1)<22)return null;
- if(common>=5&&common>=relative*1.15)return 'translate';
- if(relative>=5&&relative>=common*.95)return 'transform';
- return null;
+function anchoredGesture(cameraState,previous,next,width,height,ratio=1,turn=0,tilt=0){
+ const anchor=add(cameraState.target,planeOffset(cameraState,previous,width,height));
+ cameraState.distance=clamp(cameraState.distance*ratio,2.8,100);
+ cameraState.yaw=wrapAngle(cameraState.yaw+turn);
+ cameraState.pitch=clamp(cameraState.pitch+tilt,.00,Math.PI/2);
+ cameraState.target=sub(anchor,planeOffset(cameraState,next,width,height));
 }
-const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,orbitMode=false;
+function pairMetrics(p){
+ const x=p[1].x-p[0].x,y=p[1].y-p[0].y;
+ return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y),angle:Math.atan2(y,x)};
+}
+// Small changes in finger spacing and angle are ignored; deliberate
+// transforms can begin at any point in the same drag, without lifting.
+function gestureTransform(previous,next,reference){
+ let ratio=1,turn=0;
+ if(next.length<12||previous.length<12){reference.length=Math.max(12,next.length);reference.angle=next.angle;return {ratio,turn};}
+ const dz=Math.log(next.length/reference.length),da=wrapAngle(next.angle-reference.angle);
+ const zoomThreshold=.028,angleThreshold=.045;
+ if(Math.abs(dz)>zoomThreshold){
+  const change=dz-Math.sign(dz)*zoomThreshold;
+  ratio=Math.exp(-change);reference.length*=Math.exp(change);
+ }
+ if(Math.abs(da)>angleThreshold){
+  turn=da-Math.sign(da)*angleThreshold;reference.angle=wrapAngle(reference.angle+turn);
+ }
+ return {ratio,turn};
+}
+const pointers=new Map();let start=null,moved=false,previousPair=null,transformReference=null,pairDirty=false,orbitMode=false;
 const pair=()=>[...pointers.values()].map(p=>({...p}));
-function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pairDirty=false;}
+function resetPair(){
+ previousPair=pointers.size===2?pairMetrics(pair()):null;
+ transformReference=previousPair?{length:Math.max(12,previousPair.length),angle:previousPair.angle}:null;
+ pairDirty=false;
+}
+function localPoint(p){const rect=canvas.getBoundingClientRect();return {x:p.x-rect.left,y:p.y-rect.top};}
 function flushGesture(){
  if(!pairDirty||pointers.size!==2||!previousPair)return;
- const next=pair();pairDirty=false;
- if(!gestureKind){gestureKind=classifyGesture(previousPair,next);if(!gestureKind)return;}
- const g=gestureDelta(previousPair,next);previousPair=next;
- stopFlight();
- if(gestureKind==='translate'){
-  // Parallel finger motion cannot rotate or zoom the scene.
-  // Keep the viewing plane and camera distance fixed for the whole drag.
-  if(orbitMode){
-   cam.yaw=wrapAngle(cam.yaw+g.dx*.007);
-   cam.pitch=clamp(cam.pitch-g.dy*.006,.09,Math.PI/2);
-  }else{
-   pan(g.dx,-g.dy);
-  }
+ const next=pairMetrics(pair());pairDirty=false;stopFlight();
+ const {ratio,turn}=gestureTransform(previousPair,next,transformReference);
+ const prev=localPoint(previousPair.center),now=localPoint(next.center);
+ const w=canvas.clientWidth,h=canvas.clientHeight;
+ if(orbitMode){
+  // Optional orbit/tilt, without changing the normal map drag behavior.
+  anchoredGesture(cam,prev,prev,w,h,ratio,turn-(now.x-prev.x)*.007,(now.y-prev.y)*.006);
  }else{
-  // Relative finger motion is pinch/twist, without accidental translation.
-  cam.distance=clamp(cam.distance*g.zoom,2.8,100);
-  cam.yaw=wrapAngle(cam.yaw+g.twist);
+  anchoredGesture(cam,prev,now,w,h,ratio,turn);
  }
- dirty=true;
+ previousPair=next;dirty=true;
 }
 $('gesture-mode').onclick=()=>{
  flushGesture();orbitMode=!orbitMode;resetPair();
- $('gesture-mode').textContent=orbitMode?'2 пальца: поворот':'2 пальца: сдвиг';
+ $('gesture-mode').textContent=orbitMode?'Режим: наклон':'Режим: карта';
  $('gesture-mode').setAttribute('aria-pressed',String(orbitMode));
- $('hint').textContent=orbitMode?'2 пальца — поворот и наклон · щипок — зум':'2 пальца — сдвиг, скручивание — поворот, щипок — зум';
+ $('hint').textContent=orbitMode?'Перетаскивание — поворот и наклон · щипок — зум':'Перетаскивание — сдвиг · щипок — зум · скручивание — поворот';
 };
 canvas.addEventListener('pointerdown',e=>{
  flushGesture();stopFlight();canvas.setPointerCapture(e.pointerId);
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;}else moved=true;
+ if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button,type:e.pointerType};moved=false;}else moved=true;
  resetPair();
 });
 canvas.addEventListener('pointermove',e=>{
@@ -201,16 +213,21 @@ canvas.addEventListener('pointermove',e=>{
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(pointers.size===2){pairDirty=true;moved=true;}
  else if(pointers.size===1&&start){
-  if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;
-  if(moved){if(start.button===2||e.shiftKey)pan(dx,dy);else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.09,Math.PI/2);}dirty=true;}
+  if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved=true;
+  if(moved){
+   if((start.type==='touch'&&!orbitMode)||start.button===2||e.shiftKey)pan(dx,dy);
+   else {cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,.00,Math.PI/2);}
+   dirty=true;
+  }
  }
 });
 function finishPointer(e,cancel=false){
  if(!pointers.has(e.pointerId))return;
- flushGesture();
+ if(!cancel&&pointers.size===2){pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});pairDirty=true;}
+ if(!cancel)flushGesture();
  if(!cancel&&pointers.size===1&&!moved&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
  pointers.delete(e.pointerId);resetPair();
- if(pointers.size===1){const p=pointers.values().next().value;start={x:p.x,y:p.y,button:0};moved=true;}
+ if(pointers.size===1){const p=pointers.values().next().value;start={x:p.x,y:p.y,button:0,type:e.pointerType};moved=true;}
  else if(!pointers.size){start=null;moved=false;}
  else moved=true;
 }
