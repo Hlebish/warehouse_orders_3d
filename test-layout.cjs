@@ -7,3 +7,6 @@ assert.equal(search('S3, K7')[0].id,'S3-K-7');assert.equal(search('S3-K-7')[0].i
 const {points,route}=require('./layout.js');assert.equal(points.length,7);for(const point of points)for(const cell of cells){const p=route(point,cell);assert.deepEqual(p[0],{x:point.x,z:point.z});assert.equal(p.at(-1).z,cell.z);for(let i=1;i<p.length;i++){assert(p[i].x===p[i-1].x||p[i].z===p[i-1].z);if(p[i].x!==p[i-1].x)assert.equal(p[i].z,3);}}console.log('OK: 3150 маршрутов');
 
 const {blockers,key,sections}=require('./layout.js');assert.equal(sections.length,18);const target=search('S3, F5')[0];assert.equal(blockers([target.x-1.5,target.y,target.z],target).length,0);assert(blockers([-14,target.y,target.z],target).length>0);const lower=search('S3,A5')[0];assert(blockers([lower.x,15,lower.z],lower).includes(key(lower)));assert.deepEqual(blockers([0,10,0],null),[]);console.log('OK: occlusion');
+
+const {racks,streets,RACK_WIDTH,AISLE_WIDTH}=require('./layout.js');
+const sorted=[...racks].sort((a,b)=>a.x-b.x);let paired=0;for(let i=0;i<sorted.length-1;i++){const a=sorted[i],b=sorted[i+1];if(a.street!==b.street){assert(Math.abs(b.x-a.x-RACK_WIDTH)<1e-8);paired++;}else{assert(Math.abs(b.x-a.x-RACK_WIDTH-AISLE_WIDTH)<1e-8);}}assert.equal(paired,4);assert(AISLE_WIDTH>2.36);console.log('OK: 4 пары вплотную, широкие проходы');

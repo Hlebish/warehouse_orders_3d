@@ -3,12 +3,14 @@
 (function(root){
 const levels={left:['A','B','C','D','E'],right:['F','G','H','J','K']};
 const demo={'S1-A-2':['DEMO-001 · Крыло'],'S2-G-5':['DEMO-002 · Капот'],'S3-K-7':['DEMO-003 · Бампер'],'S4-C-3':['DEMO-004 · Фара'],'S5-F-9':['DEMO-003 · Бампер']};
+const STREET_SPACING=6.2, RACK_WIDTH=1.44, RACK_OFFSET=(STREET_SPACING-RACK_WIDTH)/2;
+const AISLE_WIDTH=2*RACK_OFFSET-RACK_WIDTH;
 const cells=[], racks=[], streets=[];
 for(let s=1;s<=5;s++){
- const x=(s-3)*6.2; streets.push({id:'S'+s,x});
+ const x=(s-3)*STREET_SPACING; streets.push({id:'S'+s,x});
  for(const side of (s===1?['left']:['left','right'])){
   // S1 на схеме имеет единственный ряд справа от прохода.
-  const rackX=x+(s===1||side==='right'?1.9:-1.9);
+  const rackX=x+(s===1||side==='right'?RACK_OFFSET:-RACK_OFFSET);
   const rack={street:'S'+s,side,x:rackX}; racks.push(rack);
   levels[side].forEach((letter,i)=>{
    for(let n=1;n<=10;n++){
@@ -38,7 +40,7 @@ function occlusion(cells,racks){
  const sections=racks.flatMap(r=>[[1,3],[4,10]].map(([first,last])=>{
   const members=cells.filter(c=>c.street===r.street&&c.side===r.side&&c.n>=first&&c.n<=last);
   const zMin=Math.min(...members.map(c=>c.z))-.83,zMax=Math.max(...members.map(c=>c.z))+.83;
-  return {id:key(members[0]),members,x:r.x,z:(zMin+zMax)/2,w:1.46,h:4.6,d:zMax-zMin};
+  return {id:key(members[0]),members,x:r.x,z:(zMin+zMax)/2,w:RACK_WIDTH,h:4.6,d:zMax-zMin};
  }));
  function hit(eye,target,center,half){
   let lo=0,hi=1;
@@ -71,5 +73,5 @@ function occlusion(cells,racks){
  }
  return {key,sections,blockers};
 }
-const layout={cells,racks,streets,search,normalizeAddress,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={cells,racks,streets,search,normalizeAddress,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
