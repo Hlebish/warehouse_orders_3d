@@ -124,5 +124,25 @@ function walkingPlan(origin,cell,route,streets){
  plan.push({pose:pose(last,lookYaw,lookPitch),duration:650,phase:'arrive'});
  return plan;
 }
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function exactArticleMatches(value){
+ const normalize=s=>String(s||'').normalize('NFKC').trim().toUpperCase();
+ const ap=s=>normalize(s).match(/^A[ \t-]*P[ \t-]*[A-Z][ \t-]*[A-Z][ \t-]*\d(?:[ \t-]*\d)*(?:[A-Z][A-Z0-9]*|-[A-Z][A-Z0-9]*|[ \t-]+[A-Z]\d*(?![A-Z0-9]))?/);
+ const compact=s=>normalize(s).replace(/[^\p{L}\p{N}]/gu,'');
+ const q=compact(ap(value)?.[0]||value);
+ if(!q)return [];
+ return cells.filter(c=>c.items.some(line=>{
+  const code=ap(line);
+  if(code||ap(q))return !!code&&compact(code[0])===q;
+  const tokens=normalize(line).match(/[\p{L}\p{N}]+/gu)||[];
+  for(let i=0;i<tokens.length;i++){let joined='';for(let j=i;j<Math.min(i+5,tokens.length);j++){joined+=tokens[j];if(joined===q)return true;if(joined.length>=q.length)break;}}
+  return false;
+ }));
+}
+function mapLinkQuery(query){
+ const params=new URLSearchParams(query),article=(params.get('article')||'').trim().slice(0,120);
+ const addresses=[...new Set(params.getAll('cell').map(normalizeAddress).filter(Boolean))].map(id=>cells.find(c=>c.id===id)).filter(Boolean);
+ return {article,addresses};
+}
+
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

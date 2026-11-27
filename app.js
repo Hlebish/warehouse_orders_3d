@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan}=WarehouseLayout;
+const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -95,7 +95,8 @@ function setWalkSpeed(value){
 function startWalkStep(step){const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.phase==='walk'?step.duration/walkSpeed:step.duration);animation.phase=step.phase;animation.baseDuration=step.duration;animation.reducedMotion=animation.duration===1;animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
 function overview(top=false){stopFlight();walkView=false;move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?Math.PI/2:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
-let inventoryReady=false,lastQuery='';
+let inventoryReady=false,lastQuery='',linkedOrder=null;
+function linkedHits(){return linkedOrder.addresses.length?linkedOrder.addresses:exactArticleMatches(linkedOrder.article);}
 function renderCellDetail(){
  if(!selected)return;
  $('result-expand').textContent=(inventoryReady?'Товары · '+selected.items.length:'Товары')+($('result-detail').hidden?' ▾':' ▴');
@@ -110,7 +111,7 @@ function refreshInventory(data,ready){
  inventoryReady=ready;const stats=applyInventory(ready?data:null);
  $('stock-badge').textContent=ready?stats.occupied+' / '+stats.total+' занято':'450 ячеек';
  if(lastQuery){
-  hits=search(lastQuery);renderMatches();
+  hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
   if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;}
   if(!selected){$('address').textContent='Не найдено';$('detail').textContent=ready?'Совпадений нет.': 'Войдите в Warehouse Map для поиска товаров.';}
   $('message').textContent=ready?'Найдено: '+hits.length: 'Для поиска товара необходимо подключение.';
@@ -118,14 +119,15 @@ function refreshInventory(data,ready){
  renderCellDetail();build();drawMini();updateActions();
 }
 window.WarehouseInventory={refresh:refreshInventory};
-function runSearch(q){clearRoute(false);$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+function runSearch(q){linkedOrder=null;clearRoute(false);$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');lastQuery=q.trim();hits=search(q);renderMatches();if(!hits.length){selected=null;$('address').textContent='Не найдено';$('detail').textContent=inventoryReady?'Проверьте адрес, артикул или название детали.':'Для поиска товара войдите через Google. Адрес ячейки можно найти без входа.';$('message').textContent='Совпадений нет.';build();drawMini();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
-function updateActions(){const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&(!selected||!hasStreetOrigin());$('route-cell').textContent=walking?'Остановить':'Проложить путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
+function updateActions(){$('route-origin').value=hasStreetOrigin()?origin.id:'';$('route-origin').disabled=walking;const visible=!!selected||!!lastQuery||!!routePath.length;$('result-panel').hidden=!visible;$('result-count').textContent=lastQuery?'Найдено: '+hits.length:'';$('result-expand').hidden=!selected;if(!selected)$('result-detail').hidden=false;$('show-cell').hidden=!selected;$('show-cell').disabled=!selected;$('route-cell').disabled=!walking&&!selected;$('route-cell').textContent=walking?'■ Остановить':'▶ В путь';$('clear-route').hidden=!routePath.length;$('clear-selection').hidden=!visible;$('route-caption').textContent=!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;}
 function showCell(){if(!selected)return;clearRoute(false);build();drawMini();updateActions();$('message').textContent='Ячейка '+selected.id+' отмечена на модели и мини-карте. Камера не перемещается.';}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
 function flyRoute(){
  if(walking){stopFlight();return;}
- if(!selected||!hasStreetOrigin())return;
+ if(!selected)return;
+ if(!hasStreetOrigin()){$('route-caption').textContent='Сначала выберите свою улицу S1–S5';$('route-origin').focus();return;}
  stopFlight();const plan=walkingPlan(origin,selected,route,streets);if(!plan.length)return;
  routePath=route(origin,selected);walking=true;walkView=false;flight=plan;
  build();drawMini();updateActions();startWalkStep(flight.shift());
@@ -144,11 +146,11 @@ if(selected){const [x,y]=miniXY(selected.x,selected.z);shape('rect',{x:x-7,y:y-8
 cameraDot=shape('circle',{cx:0,cy:0,r:4.5,fill:'#fff',stroke:'#131d27','stroke-width':1.5});updateCameraDot();
 for(const p of points)pinButtons.get(p.id).setAttribute('aria-pressed',String(p.id===origin?.id));for(const m of markers)m.el.setAttribute('aria-pressed',String(m.point.id===origin?.id));$('mini-origin').textContent='Откуда: '+(hasStreetOrigin()?origin.name:'выберите S1–S5');$('origin-info').textContent=hasStreetOrigin()?'Откуда: '+origin.name:'Старт: S1–S5';}
 function updateCameraDot(){if(!cameraDot)return;const p=walkView&&basis?basis.eye:cam.target;const [x,y]=miniXY(p[0],p[2]);cameraDot.setAttribute('cx',clamp(x,5,335));cameraDot.setAttribute('cy',clamp(y,5,245));}
-function choosePoint(p){clearRoute(false);walkView=false;origin=p;build();drawMini();updateActions();move({target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
+function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOrigin()){try{localStorage.setItem('warehouse3d.origin',p.id);}catch{}}build();drawMini();updateActions();move({target:[p.x*.72,.3,p.z*.72],yaw:.12,pitch:1.20,distance:navigationDistance(29,25)},650);$('message').textContent='Точка отправления: '+p.name+'. '+(!hasStreetOrigin()?'Для маршрута выберите S1–S5.':selected?'Можно проложить путь.':'Найдите ячейку.');}
 $('result-expand').onclick=()=>{const open=$('result-detail').hidden;$('result-detail').hidden=!open;$('result-expand').setAttribute('aria-expanded',String(open));renderCellDetail();};
-$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
+$('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';linkedOrder=null;$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();drawMini();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};$('mini-toggle').onclick=()=>{const open=$('mini-body').hidden;$('mini-body').hidden=!open;$('minimap').classList.toggle('collapsed',!open);$('mini-chevron').textContent=open?'−':'+';$('mini-toggle').setAttribute('aria-expanded',String(open));$('mini-toggle').setAttribute('aria-label',open?'Свернуть мини-карту':'Развернуть мини-карту');};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,100);dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
-function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
+function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
  const scale=2*cam.distance*Math.tan(HALF_FOV)/Math.max(1,canvas.clientHeight);
@@ -244,5 +246,15 @@ canvas.addEventListener('pointerup',e=>finishPointer(e));
 canvas.addEventListener('pointercancel',e=>finishPointer(e,true));
 canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
 $('walk-speed').value=String(walkSpeed);$('walk-speed').onchange=e=>setWalkSpeed(e.target.value);
-cam.distance=canvas.clientWidth/canvas.clientHeight<1.15?60:47;build();drawMini();updateActions();requestAnimationFrame(frame);
+$('route-origin').onchange=e=>{const point=points.find(p=>p.id===e.target.value&&streets.some(s=>s.id===p.id));if(point)choosePoint(point);else{clearRoute(false);origin=null;try{localStorage.removeItem('warehouse3d.origin');}catch{}build();drawMini();updateActions();}};
+try{const saved=localStorage.getItem('warehouse3d.origin');origin=points.find(p=>p.id===saved&&streets.some(s=>s.id===p.id))||null;}catch{}
+cam.distance=canvas.clientWidth/canvas.clientHeight<1.15?60:47;
+const incoming=mapLinkQuery(location.search);
+if(incoming.addresses.length||incoming.article){
+ linkedOrder=incoming;lastQuery=incoming.article||incoming.addresses[0].id;$('search').value=lastQuery;
+ hits=linkedHits();renderMatches();
+ if(hits.length){selected=hits[0];renderCellDetail();$('message').textContent='Из заказа · '+hits.length+' адрес(а)';}
+ else{$('address').textContent='Поиск позиции заказа';$('detail').textContent='После подключения к Warehouse Map проверим точный артикул.';}
+}
+build();drawMini();updateActions();requestAnimationFrame(frame);
 })();
