@@ -51,60 +51,14 @@ function navigation(streets){
  }
  return {points,route};
 }
-function occlusion(cells,racks){
+function rackSections(cells,racks){
  const key=c=>c.street+':'+c.side+':'+(c.n<=3?'1-3':'4-10');
  const sections=racks.flatMap(r=>[[1,3],[4,10]].map(([first,last])=>{
   const members=cells.filter(c=>c.street===r.street&&c.side===r.side&&c.n>=first&&c.n<=last);
   const zMin=Math.min(...members.map(c=>c.z))-.83,zMax=Math.max(...members.map(c=>c.z))+.83;
   return {id:key(members[0]),members,x:r.x,z:(zMin+zMax)/2,w:RACK_WIDTH,h:4.6,d:zMax-zMin};
  }));
- function hit(eye,target,center,half){
-  let lo=0,hi=1;
-  for(let i=0;i<3;i++){
-   const d=target[i]-eye[i],min=center[i]-half[i],max=center[i]+half[i];
-   if(Math.abs(d)<1e-9){if(eye[i]<min||eye[i]>max)return null;continue;}
-   let t1=(min-eye[i])/d,t2=(max-eye[i])/d;
-   lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));
-   if(lo>hi)return null;
-  }return lo;
- }
- // Match actual rendered cell boxes, beams, and shelves, not a solid rack envelope.
- const geometry=sections.map(s=>{
-  const parts=s.members.map(c=>({id:c.id,center:[c.x,c.y,c.z],half:[c.w/2,c.h/2,c.d/2]}));
-  const put=(x,y,z,w,h,d)=>parts.push({center:[x,y,z],half:[w/2,h/2,d/2]});
-  const depth=s.d-.02;
-  for(const x of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
-   for(const z of [s.z-depth/2,s.z+depth/2])put(x,2.3,z,.085,4.6,.085);
-   for(let i=0;i<=5;i++)put(x,.12+i*.88,s.z,.08,.085,depth);
-  }
-  for(const c of s.members.filter(c=>c.letter===s.members[0].letter)){
-   for(let i=0;i<=5;i++)put(s.x,.12+i*.88,c.z,RACK_WIDTH,.07,1.64);
-  }
-  return {...s,parts};
- });
- function blockers(eye,cell){
-  if(!cell)return [];
-  const center=[cell.x,cell.y,cell.z],half=[cell.w/2,cell.h/2,cell.d/2];
-  const samples=[center,...[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>[center[0]+x*half[0]*.68,center[1]+y*half[1]*.68,center[2]+z*half[2]*.68])))];
-  const votes=new Map();let blockedRays=0;
-  for(let i=0;i<samples.length;i++){
-   const target=samples[i],entry=hit(eye,target,center,half);
-   if(entry===null||entry<=1e-5)continue;
-   let blocked=false;
-   for(const s of geometry){
-    const bound=hit(eye,target,[s.x,s.h/2,s.z],[s.w/2+.05,s.h/2+.05,s.d/2+.05]);
-    if(bound===null||bound>=entry-1e-5)continue;
-    const intersects=s.parts.some(b=>{if(b.id===cell.id)return false;const t=hit(eye,target,b.center,b.half);return t!==null&&t<entry-1e-5;});
-    if(!intersects)continue;
-    blocked=true;const v=votes.get(s.id)||{count:0,center:false};v.count++;v.center ||= i===0;votes.set(s.id,v);
-   }
-   if(blocked)blockedRays++;
-  }
-  // Ignore edge-only grazing. If multiple racks jointly hide most of the target,
-  // reveal only the sections contributing materially to that occlusion.
-  return [...votes].filter(([,v])=>v.center||v.count>=5||(blockedRays>=5&&v.count>=2)).map(([id])=>id);
- }
- return {key,sections,blockers};
+ return sections;
 }
 function walkingPlan(origin,cell,route,streets){
  if(!origin||!streets.some(s=>s.id===origin.id)||!cell)return [];
@@ -165,5 +119,5 @@ function streetOverviewPose(point,aspect,halfFov){
  return {target:[point.x*bias,0,centerZ+(point.z-centerZ)*bias],yaw:0,pitch:Math.PI/2,distance};
 }
 
-const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

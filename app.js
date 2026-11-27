@@ -1,17 +1,15 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,search,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
-const touchDevice=matchMedia('(pointer: coarse)').matches;
-const gl=canvas.getContext('webgl',{antialias:!touchDevice,alpha:false});
+const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
 const vsrc='attribute vec3 p;attribute vec3 c;uniform vec3 eye,right,up,forward;uniform float aspect,zoom;varying vec3 color;void main(){vec3 v=p-eye;float d=dot(v,forward);gl_Position=vec4(dot(v,right)*zoom/aspect,dot(v,up)*zoom,1.00040008*d-.40008002,d);color=c;}';
-const fsrc='precision mediump float;varying vec3 color;uniform float opacity;void main(){gl_FragColor=vec4(color,opacity);}';
+const fsrc='precision mediump float;varying vec3 color;void main(){gl_FragColor=vec4(color,1.0);}';
 function shader(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
 let program,P,C,uniforms,buffer;if(gl){program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vsrc));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fsrc));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));gl.useProgram(program);
-P=gl.getAttribLocation(program,'p');C=gl.getAttribLocation(program,'c');uniforms=Object.fromEntries(['eye','right','up','forward','aspect','zoom','opacity'].map(n=>[n,gl.getUniformLocation(program,n)]));
+P=gl.getAttribLocation(program,'p');C=gl.getAttribLocation(program,'c');uniforms=Object.fromEntries(['eye','right','up','forward','aspect','zoom'].map(n=>[n,gl.getUniformLocation(program,n)]));
 buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(P);gl.enableVertexAttribArray(C);gl.vertexAttribPointer(P,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(C,3,gl.FLOAT,false,24,12);gl.enable(gl.DEPTH_TEST);gl.clearColor(.105,.15,.20,1);}
-let selected=null, hits=[], vertices=[], count=0, dirty=true, animation=null, flight=[], routePath=[], origin=null,walking=false,walkView=false, groundCount=0, ghostKeys=new Set(), ghostVertices=[], ghostCount=0;
-let meshRanges=[],meshData=[],opaqueRanges=[],transparentRanges=[],occlusionPending=false,lastOcclusion=0,lastOcclusionCell=null;
+let selected=null, hits=[], vertices=[], count=0, dirty=true, animation=null, flight=[], routePath=[], origin=null,walking=false,walkView=false, groundCount=0;
 const mul=(a,k)=>a.map(x=>x*k),add=(a,b)=>a.map((x,i)=>x+b[i]),sub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),norm=a=>mul(a,1/Math.hypot(...a)),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const HALF_FOV=65*Math.PI/360;
@@ -27,62 +25,26 @@ function cameraAxes(yaw,pitch){
 function camera(){const {target,yaw,pitch,distance}=cam;const axes=cameraAxes(yaw,pitch);const eye=sub(target,mul(axes.forward,distance));return {eye,...axes,aspect:canvas.width/canvas.height,zoom:1/Math.tan(HALF_FOV)};}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function box(x,y,z,w,h,d,hex){const a=w/2,b=h/2,e=d/2;const v=[[-a,-b,-e],[a,-b,-e],[a,b,-e],[-a,b,-e],[-a,-b,e],[a,-b,e],[a,b,e],[-a,b,e]].map(p=>add(p,[x,y,z]));const color=rgb(hex);for(const [ids,shade] of [[[0,1,2,3],.7],[[4,5,6,7],.93],[[0,4,7,3],.76],[[1,5,6,2],.84],[[3,2,6,7],1.15],[[0,1,5,4],.55]]){let c=color.map(n=>Math.min(n*shade,1));for(const i of [0,1,2,0,2,3])vertices.push(...v[ids[i]],...c);}}
-function build(){vertices=[];ghostVertices=[];box(0,-.18,-.6,33,.32,24,'536172');
+function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  // low perimeter walls, leaving an opening at the ramp
  box(0,.22,-12.4,33,.5,.23,'8995a0');box(16.4,.22,-.6,.23,.5,24,'8995a0');box(-16.4,.22,-7.3,.23,.5,10,'8995a0');box(-16.4,.22,7.8,.23,.5,7.2,'8995a0');
  // central cross aisle, access ramp and photo zone
  box(0,.003,2.95,32,.018,3.66,'71808b');box(-15.3,.04,3.0,2,.07,2.5,'72916c');box(-14.2,.025,8.7,2.6,.04,3.7,'6c8198');
  for(const {x} of streets){box(x,.006,-.7,.07,.02,22,'a0a9a8');}
  for(let i=1;i<routePath.length;i++){const p=routePath[i-1],q=routePath[i];box((p.x+q.x)/2,.065,(p.z+q.z)/2,Math.abs(p.x-q.x)+.18,.035,Math.abs(p.z-q.z)+.18,'62ccff');}for(const p of routePath)box(p.x,.075,p.z,.29,.04,.29,'62ccff');groundCount=vertices.length;
- meshRanges=[{kind:'ground',start:0,count:vertices.length/6}];
- const range=(kind,id,draw)=>{const start=vertices.length/6;draw();meshRanges.push({kind,id,start,count:vertices.length/6-start});};
  const matches=new Set(hits);
  for(const s of sections){
-  range('solid',s.id,()=>{
-   const d=s.d-.02;
-   for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
-    for(const zz of [s.z-d/2,s.z+d/2])box(xx,2.3,zz,.085,4.6,.085,'bc9158');
-    for(let i=0;i<=5;i++)box(xx,.12+i*.88,s.z,.08,.085,d,'bc9158');
-   }
-   for(const q of s.members.filter(c=>c.letter===s.members[0].letter))for(let i=0;i<=5;i++)box(s.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'77664e');
-   for(const c of s.members)if(c!==selected)box(c.x,c.y,c.z,c.w,c.h,c.d,matches.has(c)?'d09e50':c.items.length?'6bb58b':'53677a');
-  });
- }
- if(selected)range('selected',null,()=>box(selected.x,selected.y,selected.z,selected.w,selected.h,selected.d,'f5ca63'));
- for(const s of sections)range('ghost',s.id,()=>{
-  box(s.x,s.h/2,s.z,s.w,s.h,s.d,'7893aa');
-  for(const x of [s.x-s.w/2+.04,s.x+s.w/2-.04]){
-   for(const z of [s.z-s.d/2,s.z+s.d/2])box(x,s.h/2,z,.08,s.h,.08,'c8d9e5');
-   for(let i=0;i<=5;i++)box(x,.12+i*.88,s.z,.07,.07,s.d,'c8d9e5');
+  const d=s.d-.02;
+  for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
+   for(const zz of [s.z-d/2,s.z+d/2])box(xx,2.3,zz,.085,4.6,.085,'bc9158');
+   for(let i=0;i<=5;i++)box(xx,.12+i*.88,s.z,.08,.085,d,'bc9158');
   }
-  for(const z of [s.z-s.d/2,s.z+s.d/2])for(let i=0;i<=5;i++)box(s.x,.12+i*.88,z,s.w,.07,.07,'c8d9e5');
- });
- meshData=new Float32Array(vertices);
- if(gl){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,meshData,gl.STATIC_DRAW);vertices=[];ghostVertices=[];}
- updateMeshVisibility();dirty=true;
-}
-function visibleMeshRanges(ranges,ghosts){
- const opaque=[],transparent=[];
- function append(list,r){const last=list[list.length-1];if(last&&last.start+last.count===r.start)last.count+=r.count;else list.push({start:r.start,count:r.count});}
- for(const r of ranges){if(r.kind==='ghost'){if(ghosts.has(r.id))append(transparent,r);}else if(r.kind!=='solid'||!ghosts.has(r.id))append(opaque,r);}
- return {opaque,transparent};
-}
-function updateMeshVisibility(){
- const lists=visibleMeshRanges(meshRanges,ghostKeys);opaqueRanges=lists.opaque;transparentRanges=lists.transparent;
- if(!gl){
-  const collect=ranges=>{const out=new Float32Array(ranges.reduce((n,r)=>n+r.count*6,0));let i=0;for(const r of ranges){const part=meshData.subarray(r.start*6,(r.start+r.count)*6);out.set(part,i);i+=part.length;}return Array.from(out);};
-  vertices=collect(opaqueRanges);ghostVertices=collect(transparentRanges);
+  for(const q of s.members.filter(c=>c.letter===s.members[0].letter))for(let i=0;i<=5;i++)box(s.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'77664e');
+  for(const c of s.members)box(c.x,c.y,c.z,c.w,c.h,c.d,c===selected?'f5ca63':matches.has(c)?'d09e50':c.items.length?'6bb58b':'53677a');
  }
- count=opaqueRanges.reduce((n,r)=>n+r.count,0);ghostCount=transparentRanges.reduce((n,r)=>n+r.count,0);
-}
-function refreshOcclusion(t){
- const p=selected&&project([selected.x,selected.y,selected.z]);
- const visible=p&&p[0]>=0&&p[0]<=canvas.clientWidth&&p[1]>=0&&p[1]<=canvas.clientHeight;
- if(!walking&&visible&&selected===lastOcclusionCell&&t-lastOcclusion<50){occlusionPending=true;return;}
- occlusionPending=false;lastOcclusion=t;lastOcclusionCell=selected;
- const next=new Set(!walking&&visible?blockers(basis.eye,selected):[]);
- if(next.size===ghostKeys.size&&[...next].every(k=>ghostKeys.has(k)))return;
- ghostKeys=next;updateMeshVisibility();$('ghost-info').hidden=!next.size;$('ghost-info').textContent='Прозрачные секции: '+next.size;
+ count=vertices.length/6;
+ if(gl){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);vertices=[];}
+ dirty=true;
 }
 const markers=points.map(p=>({point:p,pos:[p.x,p.id==='photo'?.5:1.0,p.z],el:tag(p.name,p)}));const selectionTag=tag('');selectionTag.classList.add('active');selectionTag.hidden=true;
 function tag(text,point){const el=document.createElement(point?'button':'span');el.className=point?'tag scene-pin':'tag';el.textContent=text;if(point){el.type='button';el.setAttribute('aria-label','Перейти к точке '+point.name);el.setAttribute('aria-pressed',String(point.id===origin?.id));el.onclick=()=>choosePoint(point);}labels.appendChild(el);return el;}
@@ -90,24 +52,29 @@ function project(pos){let v=sub(pos,basis.eye),d=dot(v,basis.forward);if(d<.3)re
 function place(el,p){const xy=project(p);el.hidden=!xy||xy[0]<0||xy[1]<0||xy[0]>canvas.clientWidth||xy[1]>canvas.clientHeight;if(!el.hidden){el.style.left=xy[0]+'px';el.style.top=xy[1]+'px';}}
 function drawCanvas(w,h){
  ctx.fillStyle='#1b2633';ctx.fillRect(0,0,w,h);
- const faces=[],geometry=vertices.concat(ghostVertices),near=.22;
+ const faces=[],geometry=vertices,near=.22;
  for(let i=0;i<geometry.length;i+=36){
   const poly=[0,6,12,30].map(j=>{const v=sub(geometry.slice(i+j,i+j+3),basis.eye);return [dot(v,basis.right),dot(v,basis.up),dot(v,basis.forward)];});
   const clipped=[];
   for(let k=0;k<poly.length;k++){const p=poly[k],q=poly[(k+1)%poly.length],inside=p[2]>=near,next=q[2]>=near;if(inside)clipped.push(p);if(inside!==next){const t=(near-p[2])/(q[2]-p[2]);clipped.push(p.map((v,j)=>v+(q[j]-v)*t));}}
   if(clipped.length<3)continue;
   const pts=clipped.map(([x,y,d])=>[(1+x*basis.zoom/(basis.aspect*d))*w/2,(1-y*basis.zoom/d)*h/2]);
-  faces.push({pts,depth:clipped.reduce((s,p)=>s+p[2],0)/clipped.length,ground:i<groundCount,order:i,color:geometry.slice(i+3,i+6),ghost:i>=vertices.length});
+  faces.push({pts,depth:clipped.reduce((s,p)=>s+p[2],0)/clipped.length,ground:i<groundCount,order:i,color:geometry.slice(i+3,i+6)});
  }
  faces.sort((a,b)=>a.ground!==b.ground?(a.ground?-1:1):a.ground?a.order-b.order:b.depth-a.depth);
- for(const f of faces){ctx.beginPath();f.pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle='rgb('+f.color.map(n=>Math.round(n*255)).join(',')+')';ctx.globalAlpha=f.ghost?.13:1;ctx.fill();}ctx.globalAlpha=1;
+ for(const f of faces){ctx.beginPath();f.pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle='rgb('+f.color.map(n=>Math.round(n*255)).join(',')+')';ctx.fill();}
+}
+// Use the physical display resolution, bounded by a GPU-friendly pixel budget.
+function renderPixelRatio(width,height,dpr,webgl){
+ const area=Math.max(1,width*height);
+ return Math.min(Math.max(1,dpr),webgl?3:2,Math.sqrt((webgl?3200000:1600000)/area));
 }
 function frame(t){requestAnimationFrame(frame);flushGesture();if(animation){let u=clamp((t-animation.start)/animation.duration,0,1),k=animation.linear?u:u*u*(3-2*u);
 for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animation.to[key]-animation.from[key])*k;
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
 if(u>=1){animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
- const ratio=Math.min(devicePixelRatio||1,touchDevice?1.25:1.75),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty&&!(occlusionPending&&t-lastOcclusion>=50))return;dirty=false;basis=camera();refreshOcclusion(t);dirty=false;if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.uniform1f(uniforms.opacity,1);for(const r of opaqueRanges)gl.drawArrays(gl.TRIANGLES,r.start,r.count);if(ghostCount){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);gl.uniform1f(uniforms.opacity,.13);for(const r of transparentRanges)gl.drawArrays(gl.TRIANGLES,r.start,r.count);gl.depthMask(true);gl.disable(gl.BLEND);}}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';}else selectionTag.hidden=true;}
+ const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';}else selectionTag.hidden=true;}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
@@ -183,7 +150,7 @@ function choosePoint(p){clearRoute(false);walkView=false;origin=p;if(hasStreetOr
 $('result-expand').onclick=()=>{const open=$('result-detail').hidden;$('result-detail').hidden=!open;$('result-expand').setAttribute('aria-expanded',String(open));renderCellDetail();};
 $('clear-selection').onclick=()=>{clearRoute(false);selected=null;hits=[];lastQuery='';linkedOrder=null;$('result-detail').hidden=true;$('result-expand').setAttribute('aria-expanded','false');$('address').textContent='Не выбрана';$('detail').textContent='Нажмите на ячейку или найдите её по адресу.';$('results').hidden=true;$('search').value='';$('message').textContent='Выделение снято.';build();updateNavigationMarkers();updateActions();};$('show-cell').onclick=showCell;$('route-cell').onclick=flyRoute;$('clear-route').onclick=()=>{clearRoute();$('message').textContent='Маршрут убран.';};
 $('search-form').onsubmit=e=>{e.preventDefault();runSearch($('search').value);};$('overview').onclick=()=>overview();$('top').onclick=()=>overview(true);function zoom(f){stopFlight();cam.distance=clamp(cam.distance*f,2.8,Math.max(100,wideStreetPose({x:12.4,z:3}).distance*1.25));dirty=true;}$('plus').onclick=()=>zoom(.8);$('minus').onclick=()=>zoom(1.25);
-function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
+function rayPick(x,y){const rect=canvas.getBoundingClientRect();let nx=2*(x-rect.left)/rect.width-1,ny=1-2*(y-rect.top)/rect.height;const dir=norm(add(add(basis.forward,mul(basis.right,nx*basis.aspect/basis.zoom)),mul(basis.up,ny/basis.zoom)));let best=Infinity,hit=null;for(const c of cells){let lo=0,hi=Infinity;for(let i=0;i<3;i++){let center=[c.x,c.y,c.z][i],size=[c.w,c.h,c.d][i]/2,origin=basis.eye[i];if(Math.abs(dir[i])<1e-8){if(origin<center-size||origin>center+size){hi=-1;break;}continue;}let a=(center-size-origin)/dir[i],b=(center+size-origin)/dir[i];lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));}if(lo<=hi&&lo<best){best=lo;hit=c;}}if(hit){hits=[];lastQuery='';linkedOrder=null;$('results').hidden=true;$('message').textContent='Выбрано на модели.';select(hit);}}
 // Pan in the camera's viewing plane, including world height when tilted.
 function pan(dx,dy){
  const scale=2*cam.distance*Math.tan(HALF_FOV)/Math.max(1,canvas.clientHeight);

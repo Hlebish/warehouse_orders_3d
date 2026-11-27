@@ -6,7 +6,6 @@ assert.equal(search('S3, K7')[0].id,'S3-K-7');assert.equal(search('S3-K-7')[0].i
 
 const {points,route}=require('./layout.js');assert.equal(points.length,7);for(const point of points)for(const cell of cells){const p=route(point,cell);assert.deepEqual(p[0],{x:point.x,z:point.z});assert.equal(p.at(-1).z,cell.z);for(let i=1;i<p.length;i++){assert(p[i].x===p[i-1].x||p[i].z===p[i-1].z);if(p[i].x!==p[i-1].x)assert.equal(p[i].z,3);}}console.log('OK: 3150 маршрутов');
 
-const {blockers,key,sections}=require('./layout.js');assert.equal(sections.length,18);const target=search('S3, F5')[0];assert.equal(blockers([target.x-1.5,target.y,target.z],target).length,0);assert(blockers([-14,target.y,target.z],target).length>0);const lower=search('S3,A5')[0];assert(blockers([lower.x,15,lower.z],lower).includes(key(lower)));assert.deepEqual(blockers([0,10,0],null),[]);console.log('OK: occlusion');
 
 const {racks,streets,RACK_WIDTH,AISLE_WIDTH}=require('./layout.js');
 const sorted=[...racks].sort((a,b)=>a.x-b.x);let paired=0;for(let i=0;i<sorted.length-1;i++){const a=sorted[i],b=sorted[i+1];if(a.street!==b.street){assert(Math.abs(b.x-a.x-RACK_WIDTH)<1e-8);paired++;}else{assert(Math.abs(b.x-a.x-RACK_WIDTH-AISLE_WIDTH)<1e-8);}}assert.equal(paired,4);assert(AISLE_WIDTH>2.36);console.log('OK: 4 пары вплотную, широкие проходы');
@@ -15,7 +14,6 @@ const {applyInventory}=require('./layout.js');const inventory={S1:{A:{2:'Тес�
 
 const {walkingPlan}=require('./layout.js');for(const p of points.filter(p=>streets.some(s=>s.id===p.id)))for(const c of cells){const plan=walkingPlan(p,c,route,streets);assert.deepEqual(plan[0].pose.eye,[p.x,14,p.z]);assert.deepEqual(plan[1].pose.eye,[p.x,1.68,p.z]);const last=plan.at(-1);assert.equal(last.pose.eye[0],streets.find(s=>s.id===c.street).x);assert.equal(last.pose.eye[2],c.z);assert.equal(last.phase,'arrive');for(const step of plan.filter(s=>s.phase==='walk'||s.phase==='turn'))assert.equal(step.pose.eye[1],1.68);}assert.deepEqual(walkingPlan(null,cells[0],route,streets),[]);assert.deepEqual(walkingPlan(points[0],cells[0],route,streets),[]);console.log('OK: walking routes');
 
-for(const c of cells){const aisle=streets.find(s=>s.id===c.street);assert.deepEqual(blockers([aisle.x,c.y,c.z],c),[]);if(c.y<3.5)assert(blockers([c.x,14,c.z],c).includes(key(c)));assert.deepEqual(blockers([c.x,c.y,c.z],c),[]);}console.log('OK: direct sight and vertical occlusion');
 
 const {mapLinkQuery,exactArticleMatches}=require('./layout.js');assert.deepEqual(mapLinkQuery('?cell=S1-A-2&cell=S1-K-2&cell=S3-K-7&cell=S1-A-2').addresses.map(c=>c.id),['S1-A-2','S3-K-7']);assert.equal(mapLinkQuery('?article=FP+4819+311').article,'FP 4819 311');applyInventory({S1:{A:{2:'APBM2802 Крыло',3:'APBM2802A Крыло',4:'FP 4819 311 Крыло',5:'КН3755 280 Капот'}}});assert.deepEqual(exactArticleMatches('APBM2802').map(c=>c.id),['S1-A-2']);assert.deepEqual(exactArticleMatches('FP 4819 311').map(c=>c.id),['S1-A-4']);assert.deepEqual(exactArticleMatches('КН3755 280').map(c=>c.id),['S1-A-5']);applyInventory(null);
 
@@ -30,3 +28,5 @@ for(const aspect of [.25,.32,.45,.6,1,1.5,2.2,3]){const all=points.filter(p=>/^S
 // All seven navigation points fit the complete warehouse at a fixed scale.
 for(const aspect of [.25,.32,.45,.58,.6,.8,1,1.5,2.2,3]){const half=65*Math.PI/360,baseline=streetOverviewPose(points[0],aspect,half).distance;for(const point of points){const p=streetOverviewPose(point,aspect,half);assert.equal(p.distance,baseline);for(const x of [-16.5,16.5])for(const z of [-12.6,11.4])for(const y of [0,4.6]){assert(Math.abs(x-p.target[0])/((p.distance-y)*Math.tan(half)*aspect)<=.96000001);assert(Math.abs(z-p.target[2])/((p.distance-y)*Math.tan(half))<=.96000001);}if(aspect<=.8)assert(33/(2*p.distance*Math.tan(half)*aspect)>.73);}}
 console.log('OK: larger portrait framing and constant scale for all navigation points');
+
+const {sections}=require('./layout.js');assert.equal(sections.length,18);assert.equal(sections.flatMap(s=>s.members).length,450);assert.equal(new Set(sections.flatMap(s=>s.members.map(c=>c.id))).size,450);assert(!('blockers' in require('./layout.js')));console.log('OK: all rack sections rendered, no occlusion mechanism');
