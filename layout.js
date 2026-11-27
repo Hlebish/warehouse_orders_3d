@@ -153,13 +153,16 @@ function orderStreetStart(cell,points,route,streets){
 
 // Fit the whole warehouse envelope while staying directly over the street.
 function streetOverviewPose(point,aspect,halfFov){
- const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.58;
- // Use the same worst-case framing for all five streets. Only the
- // horizontal target changes when switching streets.
- const x=16.5+Math.max(...streets.map(s=>Math.abs(s.x)));
- const z=Math.max(Math.abs(-12.6-3),Math.abs(11.4-3));
+ // Keep a common scale for every navigation point, with a modest
+ // focus bias towards that point. Full centering on an edge street
+ // required excessive zoom-out, especially in portrait mode.
+ const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.96,bias=.15;
+ const centerZ=-.6;
+ const maxX=Math.max(15,...streets.map(s=>Math.abs(s.x)));
+ const maxZ=Math.max(Math.abs(3-centerZ),Math.abs(8.7-centerZ));
+ const x=16.5+bias*maxX,z=12+bias*maxZ;
  const distance=4.6+Math.max(x/(ratio*tan*margin),z/(tan*margin));
- return {target:[point.x,0,point.z],yaw:0,pitch:Math.PI/2,distance};
+ return {target:[point.x*bias,0,centerZ+(point.z-centerZ)*bias],yaw:0,pitch:Math.PI/2,distance};
 }
 
 const layout={cells,racks,streets,search,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),...occlusion(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
