@@ -1,7 +1,8 @@
 (()=>{'use strict';
 const {cells,racks,streets,search,points,route,key,sections,blockers,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels');
-const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+const touchDevice=matchMedia('(pointer: coarse)').matches;
+const gl=canvas.getContext('webgl',{antialias:!touchDevice,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
 const vsrc='attribute vec3 p;attribute vec3 c;uniform vec3 eye,right,up,forward;uniform float aspect,zoom;varying vec3 color;void main(){vec3 v=p-eye;float d=dot(v,forward);gl_Position=vec4(dot(v,right)*zoom/aspect,dot(v,up)*zoom,1.00040008*d-.40008002,d);color=c;}';
 const fsrc='precision mediump float;varying vec3 color;uniform float opacity;void main(){gl_FragColor=vec4(color,opacity);}';
@@ -10,6 +11,7 @@ let program,P,C,uniforms,buffer;if(gl){program=gl.createProgram();gl.attachShade
 P=gl.getAttribLocation(program,'p');C=gl.getAttribLocation(program,'c');uniforms=Object.fromEntries(['eye','right','up','forward','aspect','zoom','opacity'].map(n=>[n,gl.getUniformLocation(program,n)]));
 buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(P);gl.enableVertexAttribArray(C);gl.vertexAttribPointer(P,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(C,3,gl.FLOAT,false,24,12);gl.enable(gl.DEPTH_TEST);gl.clearColor(.105,.15,.20,1);}
 let selected=null, hits=[], vertices=[], count=0, dirty=true, animation=null, flight=[], routePath=[], origin=null,walking=false,walkView=false, groundCount=0, ghostKeys=new Set(), ghostVertices=[], ghostCount=0;
+let meshRanges=[],meshData=[],opaqueRanges=[],transparentRanges=[],occlusionPending=false,lastOcclusion=0,lastOcclusionCell=null;
 const mul=(a,k)=>a.map(x=>x*k),add=(a,b)=>a.map((x,i)=>x+b[i]),sub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),norm=a=>mul(a,1/Math.hypot(...a)),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const HALF_FOV=65*Math.PI/360;
@@ -32,23 +34,56 @@ function build(){vertices=[];ghostVertices=[];box(0,-.18,-.6,33,.32,24,'536172')
  box(0,.003,2.95,32,.018,3.66,'71808b');box(-15.3,.04,3.0,2,.07,2.5,'72916c');box(-14.2,.025,8.7,2.6,.04,3.7,'6c8198');
  for(const {x} of streets){box(x,.006,-.7,.07,.02,22,'a0a9a8');}
  for(let i=1;i<routePath.length;i++){const p=routePath[i-1],q=routePath[i];box((p.x+q.x)/2,.065,(p.z+q.z)/2,Math.abs(p.x-q.x)+.18,.035,Math.abs(p.z-q.z)+.18,'62ccff');}for(const p of routePath)box(p.x,.075,p.z,.29,.04,.29,'62ccff');groundCount=vertices.length;
- for(const r of racks){for(const ns of [[1,3],[4,10]]){const a=cells.find(c=>c.street===r.street&&c.side===r.side&&c.n===ns[0]),b=cells.find(c=>c.street===r.street&&c.side===r.side&&c.n===ns[1]);if(ghostKeys.has(key(a)))continue;const z=(a.z+b.z)/2,d=Math.abs(a.z-b.z)+1.64;for(const xx of [r.x-RACK_WIDTH/2+.0425,r.x+RACK_WIDTH/2-.0425]){for(const zz of [z-d/2,z+d/2])box(xx,2.3,zz,.085,4.6,.085,'bc9158');for(let i=0;i<=5;i++)box(xx,.12+i*.88,z,.08,.085,d,'bc9158');}for(let n=ns[0];n<=ns[1];n++){const q=cells.find(c=>c.street===r.street&&c.side===r.side&&c.n===n);for(let i=0;i<=5;i++)box(r.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'77664e');}}}
- for(const c of cells){if(c!==selected&&ghostKeys.has(key(c)))continue;box(c.x,c.y,c.z,c.w,c.h,c.d,c===selected?'f5ca63':hits.includes(c)?'d09e50':c.items.length?'6bb58b':'53677a');}
- const opaque=vertices;
- vertices=ghostVertices;
- for(const s of sections){if(!ghostKeys.has(s.id))continue;
-  // A translucent volume plus thin shelf outlines. Selected cell remains solid.
+ meshRanges=[{kind:'ground',start:0,count:vertices.length/6}];
+ const range=(kind,id,draw)=>{const start=vertices.length/6;draw();meshRanges.push({kind,id,start,count:vertices.length/6-start});};
+ const matches=new Set(hits);
+ for(const s of sections){
+  range('solid',s.id,()=>{
+   const d=s.d-.02;
+   for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
+    for(const zz of [s.z-d/2,s.z+d/2])box(xx,2.3,zz,.085,4.6,.085,'bc9158');
+    for(let i=0;i<=5;i++)box(xx,.12+i*.88,s.z,.08,.085,d,'bc9158');
+   }
+   for(const q of s.members.filter(c=>c.letter===s.members[0].letter))for(let i=0;i<=5;i++)box(s.x,.12+i*.88,q.z,RACK_WIDTH,.07,1.64,'77664e');
+   for(const c of s.members)if(c!==selected)box(c.x,c.y,c.z,c.w,c.h,c.d,matches.has(c)?'d09e50':c.items.length?'6bb58b':'53677a');
+  });
+ }
+ if(selected)range('selected',null,()=>box(selected.x,selected.y,selected.z,selected.w,selected.h,selected.d,'f5ca63'));
+ for(const s of sections)range('ghost',s.id,()=>{
   box(s.x,s.h/2,s.z,s.w,s.h,s.d,'7893aa');
   for(const x of [s.x-s.w/2+.04,s.x+s.w/2-.04]){
    for(const z of [s.z-s.d/2,s.z+s.d/2])box(x,s.h/2,z,.08,s.h,.08,'c8d9e5');
    for(let i=0;i<=5;i++)box(x,.12+i*.88,s.z,.07,.07,s.d,'c8d9e5');
   }
   for(const z of [s.z-s.d/2,s.z+s.d/2])for(let i=0;i<=5;i++)box(s.x,.12+i*.88,z,s.w,.07,.07,'c8d9e5');
- }
- vertices=opaque;count=vertices.length/6;ghostCount=ghostVertices.length/6;
- if(gl){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices.concat(ghostVertices)),gl.STATIC_DRAW);}dirty=true;
+ });
+ meshData=new Float32Array(vertices);
+ if(gl){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,meshData,gl.STATIC_DRAW);vertices=[];ghostVertices=[];}
+ updateMeshVisibility();dirty=true;
 }
-function refreshOcclusion(){const p=selected&&project([selected.x,selected.y,selected.z]);const visible=p&&p[0]>=0&&p[0]<=canvas.clientWidth&&p[1]>=0&&p[1]<=canvas.clientHeight;const next=new Set(!walking&&visible?blockers(basis.eye,selected):[]);if(next.size===ghostKeys.size&&[...next].every(k=>ghostKeys.has(k)))return;ghostKeys=next;build();$('ghost-info').hidden=!next.size;$('ghost-info').textContent='Прозрачные секции: '+next.size;}
+function visibleMeshRanges(ranges,ghosts){
+ const opaque=[],transparent=[];
+ function append(list,r){const last=list[list.length-1];if(last&&last.start+last.count===r.start)last.count+=r.count;else list.push({start:r.start,count:r.count});}
+ for(const r of ranges){if(r.kind==='ghost'){if(ghosts.has(r.id))append(transparent,r);}else if(r.kind!=='solid'||!ghosts.has(r.id))append(opaque,r);}
+ return {opaque,transparent};
+}
+function updateMeshVisibility(){
+ const lists=visibleMeshRanges(meshRanges,ghostKeys);opaqueRanges=lists.opaque;transparentRanges=lists.transparent;
+ if(!gl){
+  const collect=ranges=>{const out=new Float32Array(ranges.reduce((n,r)=>n+r.count*6,0));let i=0;for(const r of ranges){const part=meshData.subarray(r.start*6,(r.start+r.count)*6);out.set(part,i);i+=part.length;}return Array.from(out);};
+  vertices=collect(opaqueRanges);ghostVertices=collect(transparentRanges);
+ }
+ count=opaqueRanges.reduce((n,r)=>n+r.count,0);ghostCount=transparentRanges.reduce((n,r)=>n+r.count,0);
+}
+function refreshOcclusion(t){
+ const p=selected&&project([selected.x,selected.y,selected.z]);
+ const visible=p&&p[0]>=0&&p[0]<=canvas.clientWidth&&p[1]>=0&&p[1]<=canvas.clientHeight;
+ if(!walking&&visible&&selected===lastOcclusionCell&&t-lastOcclusion<50){occlusionPending=true;return;}
+ occlusionPending=false;lastOcclusion=t;lastOcclusionCell=selected;
+ const next=new Set(!walking&&visible?blockers(basis.eye,selected):[]);
+ if(next.size===ghostKeys.size&&[...next].every(k=>ghostKeys.has(k)))return;
+ ghostKeys=next;updateMeshVisibility();$('ghost-info').hidden=!next.size;$('ghost-info').textContent='Прозрачные секции: '+next.size;
+}
 const markers=points.map(p=>({point:p,pos:[p.x,p.id==='photo'?.5:1.0,p.z],el:tag(p.name,p)}));const selectionTag=tag('');selectionTag.classList.add('active');selectionTag.hidden=true;
 function tag(text,point){const el=document.createElement(point?'button':'span');el.className=point?'tag scene-pin':'tag';el.textContent=text;if(point){el.type='button';el.setAttribute('aria-label','Перейти к точке '+point.name);el.setAttribute('aria-pressed',String(point.id===origin?.id));el.onclick=()=>choosePoint(point);}labels.appendChild(el);return el;}
 function project(pos){let v=sub(pos,basis.eye),d=dot(v,basis.forward);if(d<.3)return null;let x=dot(v,basis.right)*basis.zoom/(basis.aspect*d),y=dot(v,basis.up)*basis.zoom/d;return [(x+1)*canvas.clientWidth/2,(1-y)*canvas.clientHeight/2];}
@@ -72,7 +107,7 @@ for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animat
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
 if(u>=1){animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
- const ratio=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();refreshOcclusion();dirty=false;if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.uniform1f(uniforms.opacity,1);gl.drawArrays(gl.TRIANGLES,0,count);if(ghostCount){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);gl.uniform1f(uniforms.opacity,.13);gl.drawArrays(gl.TRIANGLES,count,ghostCount);gl.depthMask(true);gl.disable(gl.BLEND);}}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';}else selectionTag.hidden=true;updateCameraDot();}
+ const ratio=Math.min(devicePixelRatio||1,touchDevice?1.25:1.75),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty&&!(occlusionPending&&t-lastOcclusion>=50))return;dirty=false;basis=camera();refreshOcclusion(t);dirty=false;if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.uniform1f(uniforms.opacity,1);for(const r of opaqueRanges)gl.drawArrays(gl.TRIANGLES,r.start,r.count);if(ghostCount){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);gl.uniform1f(uniforms.opacity,.13);for(const r of transparentRanges)gl.drawArrays(gl.TRIANGLES,r.start,r.count);gl.depthMask(true);gl.disable(gl.BLEND);}}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}if(selected&&!(walking&&walkView)){const xy=project([selected.x,selected.y+.56,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+selected.id;selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';}else selectionTag.hidden=true;updateCameraDot();}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
