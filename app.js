@@ -203,31 +203,6 @@ function pan(dx,dy){
  cam.target=add(cam.target,add(mul(right,-dx*scale),mul(up,dy*scale)));
  dirty=true;
 }
-// A gesture keeps its type until the fingers are lifted.
-function pairMetrics(p){
- const x=p[1].x-p[0].x,y=p[1].y-p[0].y;
- return {center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2},length:Math.hypot(x,y),angle:Math.atan2(y,x)};
-}
-function classifyPair(base,next){
- const x0=next[0].x-base[0].x,y0=next[0].y-base[0].y,x1=next[1].x-base[1].x,y1=next[1].y-base[1].y;
- const m0=Math.hypot(x0,y0),m1=Math.hypot(x1,y1);
- const common=Math.hypot(x0+x1,y0+y1)/2;
- const before=pairMetrics(base),after=pairMetrics(next);
- if(Math.max(m0,m1)<5||before.length<12||after.length<12)return null;
- const radial=Math.abs(after.length-before.length)/2;
- const angle=Math.abs(wrapAngle(after.angle-before.angle));
- const tangential=angle*(before.length+after.length)/4;
- const parallel=m0>2&&m1>2&&(x0*x1+y0*y1)/(m0*m1)>.88;
- if(angle>=.085&&tangential>=3.5&&tangential>=radial*1.2&&tangential>=common*.65)return 'twist';
- if(parallel&&common>=5&&radial<=common*.38&&tangential<=common*.38)return 'pan';
- if(radial>=5&&radial>=tangential*1.45&&radial>=common*.8&&angle<.14)return 'pinch';
- return null;
-}
-function confirmPair(state,kind,now){
- if(!kind){state.kind=null;state.since=now;return null;}
- if(state.kind!==kind){state.kind=kind;state.since=now;return null;}
- return now-state.since>=(kind==='twist'?32:64)?kind:null;
-}
 function planeOffset(state,point,width,height){
  const axes=cameraAxes(state.yaw,state.pitch);
  const scale=2*state.distance*Math.tan(HALF_FOV)/Math.max(1,height);
@@ -238,58 +213,42 @@ function pinchAt(state,point,width,height,ratio){
  state.distance=clamp(state.distance*ratio,2.8,Math.max(100,wideStreetPose({x:12.4,z:3}).distance*1.25));
  state.target=sub(anchor,planeOffset(state,point,width,height));
 }
-const pointers=new Map();let start=null,moved=false,previousPair=null,gestureKind=null,pairDirty=false,pinchCenter=null,multiUsed=false,pairCandidate={kind:null,since:0};
-const pair=()=>[...pointers.values()].map(p=>({...p}));
-function resetPair(){previousPair=pointers.size===2?pair():null;gestureKind=null;pinchCenter=null;pairDirty=false;pairCandidate={kind:null,since:0};}
-function localPoint(p){const rect=canvas.getBoundingClientRect();return {x:p.x-rect.left,y:p.y-rect.top};}
-function flushGesture(){
- if((!pairDirty&&(gestureKind||!pairCandidate.kind))||pointers.size!==2||!previousPair)return;
- const next=pair();pairDirty=false;
- const prev=pairMetrics(previousPair),now=pairMetrics(next);
- if(!gestureKind){
-  gestureKind=confirmPair(pairCandidate,classifyPair(previousPair,next),performance.now());
-  if(!gestureKind)return;
-  if(gestureKind==='pinch')pinchCenter=localPoint(prev.center);
- }
+// Orbit sensitivity follows viewport height (like standard orbit controls),
+// bounded so a small landscape viewport cannot make rotation excessively fast.
+function orbitDrag(dx,dy){
+ const speed=clamp(2*Math.PI/Math.max(1,canvas.clientHeight),.0045,.012);
+ cam.yaw=wrapAngle(cam.yaw-dx*speed);
+ cam.pitch=clamp(cam.pitch+dy*speed*.85,0,Math.PI/2);dirty=true;
+}
+const touch=WarehouseTouch.createInput(action=>{
+ if(action.kind==='tap'){if(basis)rayPick(action.x,action.y);return;}
  stopFlight();
- if(gestureKind==='pan')pan(prev.center.x-now.center.x,prev.center.y-now.center.y);
- else if(gestureKind==='pinch'&&prev.length>8&&now.length>8)pinchAt(cam,pinchCenter,canvas.clientWidth,canvas.clientHeight,prev.length/now.length);
- else if(gestureKind==='twist'&&prev.length>12&&now.length>12)cam.yaw=wrapAngle(cam.yaw+wrapAngle(now.angle-prev.angle));
- previousPair=next;dirty=true;
-}
+ if(action.kind==='orbit')orbitDrag(action.dx,action.dy);
+ else if(action.kind==='mousePan')pan(action.dx,action.dy);
+ else if(action.kind==='pan')pan(-action.dx,-action.dy);
+ else if(action.kind==='pinch'){
+  const rect=canvas.getBoundingClientRect();
+  pinchAt(cam,{x:action.center.x-rect.left,y:action.center.y-rect.top},canvas.clientWidth,canvas.clientHeight,action.ratio);
+ }else if(action.kind==='twist')cam.yaw=wrapAngle(cam.yaw+action.angle);
+ dirty=true;
+});
+function flushGesture(){touch.flush(performance.now());}
+const pointer=e=>({x:e.clientX,y:e.clientY,button:e.button,type:e.pointerType,shift:e.shiftKey});
 canvas.addEventListener('pointerdown',e=>{
- flushGesture();stopFlight();canvas.setPointerCapture(e.pointerId);
- pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===1){start={x:e.clientX,y:e.clientY,button:e.button};moved=false;multiUsed=false;}
- else {moved=true;multiUsed=true;}
- resetPair();
+ if(e.pointerType==='mouse'&&e.button!==0&&e.button!==2)return;
+ flushGesture();stopFlight();
+ touch.down(e.pointerId,pointer(e));
+ try{canvas.setPointerCapture(e.pointerId);}catch{}
 });
-canvas.addEventListener('pointermove',e=>{
- if(!pointers.has(e.pointerId))return;
- const old=pointers.get(e.pointerId),dx=e.clientX-old.x,dy=e.clientY-old.y;
- pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===2){pairDirty=true;moved=true;}
- else if(pointers.size===1&&start&&!multiUsed){
-  if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved=true;
-  if(moved){
-   if(start.button===2||e.shiftKey)pan(dx,dy);
-   else{cam.yaw=wrapAngle(cam.yaw-dx*.007);cam.pitch=clamp(cam.pitch+dy*.006,0,Math.PI/2);}
-   dirty=true;
-  }
- }
-});
-function finishPointer(e,cancel=false){
- if(!pointers.has(e.pointerId))return;
- if(!cancel&&pointers.size===2){pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});pairDirty=true;}
- if(!cancel)flushGesture();
- if(!cancel&&pointers.size===1&&!moved&&!multiUsed&&start&&start.button===0&&basis)rayPick(e.clientX,e.clientY);
- pointers.delete(e.pointerId);resetPair();
- if(!pointers.size){start=null;moved=false;multiUsed=false;}
- else moved=true;
-}
+canvas.addEventListener('pointermove',e=>{if(touch.has(e.pointerId))touch.move(e.pointerId,{x:e.clientX,y:e.clientY});});
+function finishPointer(e,cancel=false){touch.up(e.pointerId,{x:e.clientX,y:e.clientY},performance.now(),cancel);}
 canvas.addEventListener('pointerup',e=>finishPointer(e));
 canvas.addEventListener('pointercancel',e=>finishPointer(e,true));
-canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
+canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));
+window.addEventListener('blur',()=>touch.reset());
+document.addEventListener('visibilitychange',()=>{if(document.hidden)touch.reset();});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
 $('walk-speed').value=String(walkSpeed);$('walk-speed').onchange=e=>setWalkSpeed(e.target.value);
 $('route-origin').onchange=e=>{const point=points.find(p=>p.id===e.target.value&&streets.some(s=>s.id===p.id));if(point)choosePoint(point);else{clearRoute(false);origin=null;try{localStorage.removeItem('warehouse3d.origin');}catch{}build();drawMini();updateActions();}};
 try{const saved=localStorage.getItem('warehouse3d.origin');origin=points.find(p=>p.id===saved&&streets.some(s=>s.id===p.id))||null;}catch{}
