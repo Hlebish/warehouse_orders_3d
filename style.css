@@ -70,3 +70,18 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 .map-shell #ghost-info{top:48px}
 @media(max-width:760px){main.map-shell{gap:5px;padding:5px;padding-top:max(5px,env(safe-area-inset-top));padding-bottom:max(5px,env(safe-area-inset-bottom))}.topbar{flex-wrap:wrap;gap:3px 6px}.topbar form{flex:1 0 100%;width:100%}.topbar .syncbar{padding:0 3px;flex:1;justify-content:flex-start}.topbar .syncbar .sync-buttons{margin-left:auto}.topbar .syncbar .sync-buttons button{min-height:26px;padding:4px 7px}.stock-count{padding-right:3px;font-size:10px}.map-tools{top:6px;right:6px;max-width:95%}.map-tools .tools{gap:3px}.map-tools .tools button{min-height:30px;font-size:10px;padding:5px 7px}.map-shell .legend{top:43px;max-width:75%;font-size:9px}.map-shell #ghost-info{top:69px}.map-shell #minimap:not(.collapsed){bottom:63px}.map-shell #route-overlay{bottom:8px}.map-shell #minimap.collapsed{bottom:8px}#result-panel{max-height:34dvh}.result-actions{margin-top:4px}}
 @media(max-height:450px){#result-panel{max-height:30dvh}.map-shell .legend{display:none}.map-shell #ghost-info{top:44px}.topbar .syncbar[data-state=login] #sync-detail{display:none}.map-shell #minimap:not(.collapsed){max-height:75%;overflow:auto;bottom:8px}}
+
+/* 0.19 — inset search and persistent walk speed */
+.topbar{margin:6px 12px 2px;gap:12px}
+.topbar form{position:relative;align-items:center;border:1px solid #41536a;border-radius:14px;background:#172533;padding:5px 6px;box-shadow:0 3px 12px #0002;transition:border-color .15s}
+.topbar form:focus-within{border-color:#8cb8cf;box-shadow:0 0 0 2px #8cb8cf22}
+.search-icon{display:grid;place-items:center;width:29px;flex:0 0 29px;color:#8da9bf}
+.topbar input{width:0;min-width:0;flex:1;background:transparent;border:0;border-radius:7px;padding:8px 2px;outline:0;font-size:16px}
+.topbar input::placeholder{color:#8ea1b5;font-size:13px}
+.topbar form button{padding:9px 16px;border-radius:9px;min-height:38px;font-size:13px}
+#result-panel{margin:0 12px}
+.walk-speed-control{pointer-events:auto;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 6px;border-radius:7px;background:#101c28e8;border:1px solid #41576b;font-size:11px;color:#ccdae7}
+#walk-speed{font:inherit;color:#e8eff7;border:1px solid #52677b;border-radius:5px;background:#233546;padding:4px 5px;min-height:28px;cursor:pointer}
+#walk-speed:focus-visible{outline:2px solid #a7e3ff;outline-offset:1px}
+@media(max-width:760px){.topbar{margin:6px 9px 3px;gap:4px 6px}.topbar form{padding:4px 5px;gap:4px}.topbar form button{min-height:36px;padding:8px 12px}.search-icon{width:23px;flex-basis:23px}.search-icon svg{width:18px;height:18px}#result-panel{margin:0 9px}.walk-speed-control{font-size:10px;padding:3px 5px}#walk-speed{min-height:30px;font-size:11px}.map-shell #minimap:not(.collapsed){bottom:110px;max-height:calc(100% - 150px);overflow:auto}}
+@media(max-height:450px){.topbar{margin-top:0;margin-bottom:0}.topbar form{padding:2px 4px}.topbar input{padding:4px 2px}.topbar form button{min-height:30px;padding:5px 12px}.map-shell #minimap:not(.collapsed){bottom:8px;max-height:75%}}

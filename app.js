@@ -76,7 +76,23 @@ if(u>=1){animation=null;if(flight.length){startWalkStep(flight.shift());}else if
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;if(was){dirty=true;updateActions();$('route-caption').textContent='Маршрут остановлен';}}
-function startWalkStep(step){const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.duration);animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
+const WALK_SPEEDS=[.5,.75,1,1.25,1.5,2,3];
+function validWalkSpeed(value){const n=Number(value);return WALK_SPEEDS.includes(n)?n:1;}
+let walkSpeed=1;
+try{walkSpeed=validWalkSpeed(localStorage.getItem('warehouse3d.walkSpeed'));}catch{}
+function retimeWalk(step,now,speed){
+ if(!step||step.phase!=='walk'||step.reducedMotion)return;
+ const progress=clamp((now-step.start)/step.duration,0,1);
+ step.duration=step.baseDuration/speed;
+ step.start=now-progress*step.duration;
+}
+function setWalkSpeed(value){
+ walkSpeed=validWalkSpeed(value);
+ $('walk-speed').value=String(walkSpeed);
+ retimeWalk(animation,performance.now(),walkSpeed);
+ try{localStorage.setItem('warehouse3d.walkSpeed',String(walkSpeed));}catch{}
+}
+function startWalkStep(step){const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.phase==='walk'?step.duration/walkSpeed:step.duration);animation.phase=step.phase;animation.baseDuration=step.duration;animation.reducedMotion=animation.duration===1;animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
 function overview(top=false){stopFlight();walkView=false;move({target:[0,0,-.5],yaw:top?0:.24,pitch:top?Math.PI/2:.78,distance:canvas.clientWidth/canvas.clientHeight<1.15?60:47});}
 function clearRoute(rebuild=true){stopFlight();routePath=[];if(rebuild)build();drawMini();updateActions();}
 let inventoryReady=false,lastQuery='';
@@ -218,5 +234,6 @@ function finishPointer(e,cancel=false){
 canvas.addEventListener('pointerup',e=>finishPointer(e));
 canvas.addEventListener('pointercancel',e=>finishPointer(e,true));
 canvas.addEventListener('lostpointercapture',e=>finishPointer(e,true));canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.001));},{passive:false});
+$('walk-speed').value=String(walkSpeed);$('walk-speed').onchange=e=>setWalkSpeed(e.target.value);
 cam.distance=canvas.clientWidth/canvas.clientHeight<1.15?60:47;build();drawMini();updateActions();requestAnimationFrame(frame);
 })();
