@@ -61,3 +61,9 @@ applyInventory({S2:{A:{2:'APBM2802 — Крыло'}}});
 assert.deepEqual(linkedCellMatches(stale,true).map(c=>c.id),['S2-A-2']);
 assert.deepEqual(linkedCellMatches(mapLinkQuery('?cell=S3-K-7'),true).map(c=>c.id),['S3-K-7']);
 applyInventory(null);
+
+const {routeDistance}=require('./layout.js');assert.equal(normalizeAddress('S3 G07'),'S3-G-7');assert.equal(normalizeAddress('S1 A01'),'S1-A-1');assert.equal(normalizeAddress('S1 A00'),null);assert.equal(routeDistance([]),0);assert.equal(routeDistance([{x:0,z:0},{x:3,z:0},{x:3,z:4}]),7);
+for(const c of cells){const p=points.find(p=>p.id===c.street);assert(Math.abs(routeDistance(route(p,c))-Math.abs(c.z-p.z))<1e-8);}
+applyInventory({S1:{A:{1:'Другой товар ABC',2:'ABC — Товар',3:'APBM2802A — Деталь',4:'APBM2802 — Деталь'}}});
+assert.equal(search('ABC')[0].id,'S1-A-2');assert.equal(search('APBM2802')[0].id,'S1-A-4');assert.equal(search('APBM2802')[0].id,'S1-A-4');
+applyInventory({S1:{A:{1:'ABC — Товар'}}});assert.equal(search('ABC')[0].id,'S1-A-1');assert.equal(search('APBM2802').length,0);applyInventory(null);

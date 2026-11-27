@@ -20,7 +20,7 @@ for(let s=1;s<=5;s++){
   });
  }
 }
-function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*([1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+m[3]:null;}
+function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*(0?[1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+Number(m[3]):null;}
 function applyInventory(data){
  let occupied=0,lines=0;
  for(const c of cells){
@@ -57,23 +57,29 @@ function cellArticles(items){
 }
 
 const normalizeCode=value=>String(value||'').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu,'');
+const searchCache=new WeakMap();
+const normalizeWords=s=>s.normalize('NFKC').toUpperCase().replace(/Ё/g,'Е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+function searchRecords(items){
+ let records=searchCache.get(items);
+ if(!records){records=items.map(item=>({codes:cellArticles([item]).map(normalizeCode),compact:normalizeCode(item),words:normalizeWords(item),structured:/\s+[—–]\s+/u.test(item)}));searchCache.set(items,records);}
+ return records;
+}
 function search(value){
  const q=String(value).normalize('NFKC').trim().toUpperCase();if(!q)return [];
  const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);
  const article=normalizeCode(q);
  const isArticle=/^[\p{L}\p{N}\s._/+()-]+$/u.test(q)&&/\d/.test(article)&&article.length>=3;
- const normal=s=>s.normalize('NFKC').toUpperCase().replace(/Ё/g,'Е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
- const words=normal(q).split(/\s+/).filter(Boolean),ranked=[];
+ const words=normalizeWords(q).split(/\s+/).filter(Boolean),ranked=[];
  for(const c of cells){
   let score=0;
-  for(const item of c.items){
-   const codes=cellArticles([item]).map(normalizeCode);
-   if(isArticle&&codes.includes(article)){score=3;break;}
+  for(const item of searchRecords(c.items)){
+   const codes=item.codes;
+   if(article&&codes.includes(article)){score=3;break;}
    if(isArticle&&codes.some(code=>code.startsWith(article)))score=Math.max(score,2);
    else if(isArticle&&codes.some(code=>code.includes(article)))score=Math.max(score,1);
    // Legacy unstructured rows can contain the article after the name.
-   if(isArticle&&!/\s+[—–]\s+/u.test(item)&&normalizeCode(item).includes(article))score=Math.max(score,1);
-   if(words.length&&words.every(word=>normal(item).includes(word)))score=Math.max(score,1);
+   if(isArticle&&!item.structured&&item.compact.includes(article))score=Math.max(score,1);
+   if(words.length&&words.every(word=>item.words.includes(word)))score=Math.max(score,1);
   }
   if(score)ranked.push({c,score});
  }
@@ -197,5 +203,6 @@ function linkedCellMatches(link,ready){
  if(!link)return [];
  return ready&&link.article?exactArticleMatches(link.article):link.addresses;
 }
-const layout={cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+function routeDistance(path){return path.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-path[i].x,p.z-path[i].z),0);}
+const layout={routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);
