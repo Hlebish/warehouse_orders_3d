@@ -68,24 +68,41 @@ function occlusion(cells,racks){
    if(lo>hi)return null;
   }return lo;
  }
+ // Match actual rendered cell boxes, beams, and shelves, not a solid rack envelope.
+ const geometry=sections.map(s=>{
+  const parts=s.members.map(c=>({id:c.id,center:[c.x,c.y,c.z],half:[c.w/2,c.h/2,c.d/2]}));
+  const put=(x,y,z,w,h,d)=>parts.push({center:[x,y,z],half:[w/2,h/2,d/2]});
+  const depth=s.d-.02;
+  for(const x of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425]){
+   for(const z of [s.z-depth/2,s.z+depth/2])put(x,2.3,z,.085,4.6,.085);
+   for(let i=0;i<=5;i++)put(x,.12+i*.88,s.z,.08,.085,depth);
+  }
+  for(const c of s.members.filter(c=>c.letter===s.members[0].letter)){
+   for(let i=0;i<=5;i++)put(s.x,.12+i*.88,c.z,RACK_WIDTH,.07,1.64);
+  }
+  return {...s,parts};
+ });
  function blockers(eye,cell){
   if(!cell)return [];
   const center=[cell.x,cell.y,cell.z],half=[cell.w/2,cell.h/2,cell.d/2];
-  const samples=[center,...[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>[center[0]+x*half[0]*.77,center[1]+y*half[1]*.77,center[2]+z*half[2]*.77])))];
-  const own=key(cell);
-  return sections.filter(s=>samples.some(target=>{
-   const entry=hit(eye,target,center,half);
-   if(entry===null)return false;
-   if(s.id!==own){
-    const t=hit(eye,target,[s.x,s.h/2,s.z],[s.w/2,s.h/2,s.d/2]);
-    return t!==null&&t<entry-1e-5;
+  const samples=[center,...[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>[center[0]+x*half[0]*.68,center[1]+y*half[1]*.68,center[2]+z*half[2]*.68])))];
+  const votes=new Map();let blockedRays=0;
+  for(let i=0;i<samples.length;i++){
+   const target=samples[i],entry=hit(eye,target,center,half);
+   if(entry===null||entry<=1e-5)continue;
+   let blocked=false;
+   for(const s of geometry){
+    const bound=hit(eye,target,[s.x,s.h/2,s.z],[s.w/2+.05,s.h/2+.05,s.d/2+.05]);
+    if(bound===null||bound>=entry-1e-5)continue;
+    const intersects=s.parts.some(b=>{if(b.id===cell.id)return false;const t=hit(eye,target,b.center,b.half);return t!==null&&t<entry-1e-5;});
+    if(!intersects)continue;
+    blocked=true;const v=votes.get(s.id)||{count:0,center:false};v.count++;v.center ||= i===0;votes.set(s.id,v);
    }
-   return s.members.some(c=>{
-    if(c.id===cell.id)return false;
-    const t=hit(eye,target,[c.x,c.y,c.z],[c.w/2,c.h/2,c.d/2]);
-    return t!==null&&t<entry-1e-5;
-   });
-  })).map(s=>s.id);
+   if(blocked)blockedRays++;
+  }
+  // Ignore edge-only grazing. If multiple racks jointly hide most of the target,
+  // reveal only the sections contributing materially to that occlusion.
+  return [...votes].filter(([,v])=>v.center||v.count>=5||(blockedRays>=5&&v.count>=2)).map(([id])=>id);
  }
  return {key,sections,blockers};
 }
