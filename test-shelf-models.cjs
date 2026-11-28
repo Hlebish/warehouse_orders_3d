@@ -180,3 +180,20 @@ for(const cell of cells){
   assert(Math.abs(z-cell.z)<cell.d/2);
  }
 }
+
+for(const [model,rows] of [['headlight',1],['headlightDouble',2]]){
+ const design=e.apply([],['S3-D-9'],model);
+ assert.deepEqual(e.validate(JSON.parse(JSON.stringify(design))),[{model,ids:['S3-D-9']}]);
+ const b=e.bounds(design[0]);
+ for(const side of [-1,1])for(const occupied of [false,true]){
+  const boxes=[];
+  drawShelf((...box)=>boxes.push(box),()=>{},b,model,side,'53677a',occupied);
+  const cartons=boxes.filter(box=>['b58558','aa794e'].includes(box[6]));
+  assert.equal(cartons.length,occupied?rows*2:0);
+  assert.equal(new Set(cartons.map(box=>box[0])).size,occupied?rows:0);
+  for(const [x,y,z,w,h,d] of cartons){
+   assert(d>2*w && Math.abs(x-b.x)+w/2<=b.w/2 && Math.abs(z-b.z)+d/2<=b.d/2);
+   assert(y-h/2>=b.base && y+h/2<b.top);
+  }
+ }
+}

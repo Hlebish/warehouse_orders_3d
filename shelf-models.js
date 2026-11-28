@@ -1,6 +1,6 @@
 /* Visual shelf customizations only. Never changes inventory addresses. */
 (function(root){
-const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1],bumper:[1]});
+const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1],bumper:[1],headlight:[1],headlightDouble:[1]});
 function createShelfEditor(cells){
  const byId=new Map(cells.map(c=>[c.id,c]));
  const sameBay=(a,b)=>a&&b&&a.street===b.street&&a.side===b.side&&a.n===b.n;
@@ -205,6 +205,19 @@ function bumperStock(quad,b,base,side){
   quad([surface(.07,-.34),surface(.21,-.34),surface(.21,-.12),surface(.07,-.12)],'696f73',1);
  }
 }
+function headlightCartons(box,b,base,side,rows){
+ const length=(b.d-.18)/2,width=b.w*.26,height=.29;
+ for(let row=0;row<rows;row++){
+  const x=b.x+side*(.5*(rows-1)-row)*(width+.07);
+  for(let i=0;i<2;i++){
+   const z=b.z+(i-.5)*(length+.035);
+   box(x,base+height/2,z,width,height,length,i===row?'b58558':'aa794e');
+   // Packing tape follows the long lid seam. The stock label faces the aisle.
+   box(x,base+height+.002,z,.035,.004,length,'d4b17b');
+   box(x+side*(width/2+.002),base+height*.6,z+length*.22,.004,.064,.11,'e9dfc9');
+  }
+ }
+}
 function drawShelf(box,quad,b,model,side,accent,showStock=true){
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
  if(model==='shelf')return;
@@ -212,6 +225,7 @@ function drawShelf(box,quad,b,model,side,accent,showStock=true){
  // Pistons are stored outside the address inventory: always show their assigned model.
  if(model==='piston'){pistonStock(box,b,base,side);return;}
  if(!showStock)return;
+ if(model==='headlight'||model==='headlightDouble'){headlightCartons(box,b,base,side,model==='headlight'?1:2);return;}
  if(model==='bumper'){bumperStock(quad,b,base,side);return;}
  for(const pack of packingPlan(b,model)){
   if(model==='wing')wingPack(quad,b,base,side,pack);else hoodPack(quad,b,base,side,pack);
