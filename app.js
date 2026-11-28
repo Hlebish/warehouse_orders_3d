@@ -75,6 +75,19 @@ function buildLandmarks(){
   }
  }
 }
+function buildPackingTable(){
+ const rack=sections.find(section=>section.id==='S1:left:1-3');
+ const width=2*RACK_WIDTH-.12,depth=.82;
+ const x=rack.x+RACK_WIDTH/2,z=rack.z-rack.d/2-depth/2;
+ box(x,.91,z,width,.08,depth,'c79660');
+ for(const dx of [-1,1])for(const dz of [-1,1]){
+  box(x+dx*(width/2-.08),.44,z+dz*(depth/2-.08),.07,.88,.07,'74818c');
+ }
+ box(x,.24,z,width-.12,.05,depth-.12,'73818b');
+ box(x-.65,1.09,z,.46,.28,.32,'b88957');
+ box(x-.65,1.232,z,.055,.004,.32,'e6c893');
+ for(let i=0;i<4;i++)box(x+.68,.957+i*.014,z,.56,.014,.36,i%2?'ad865a':'c49b69');
+}
 function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  buildLandmarks();
  // low perimeter walls, leaving an opening at the ramp and adjoining warehouse
@@ -87,6 +100,7 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  const targetAisle=selected&&!editing?streets.find(street=>street.id===selected.street):null;
  if(targetAisle)WarehouseShelves.drawBayApproach(meshQuad,selected,targetAisle.x);
  groundCount=vertices.length;
+ buildPackingTable();
  const matches=new Set(hits),editSet=new Set(editIds);
  const highlight=c=>editing?editSet.has(c.id):c===selected;
  const tone=c=>cellTone(c,inventoryReady,highlight(c),matches.has(c));
