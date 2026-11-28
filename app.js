@@ -84,6 +84,8 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  for(const {x} of streets){box(x,.006,-.7,.07,.02,22,'a0a9a8');}
  for(let i=1;i<routePath.length;i++){const p=routePath[i-1],q=routePath[i];box((p.x+q.x)/2,.051,(p.z+q.z)/2,Math.abs(p.x-q.x)+.32,.025,Math.abs(p.z-q.z)+.32,'25485d');box((p.x+q.x)/2,.075,(p.z+q.z)/2,Math.abs(p.x-q.x)+.18,.035,Math.abs(p.z-q.z)+.18,'62ccff');}
  if(routePath.length){const first=routePath[0],last=routePath.at(-1);box(first.x,.10,first.z,.52,.06,.52,'a9e878');box(last.x,.10,last.z,.58,.06,.58,'f5ca63');}
+ const targetAisle=selected&&!editing?streets.find(street=>street.id===selected.street):null;
+ if(targetAisle)WarehouseShelves.drawBayApproach(meshQuad,selected,targetAisle.x);
  groundCount=vertices.length;
  const matches=new Set(hits),editSet=new Set(editIds);
  const highlight=c=>editing?editSet.has(c.id):c===selected;
@@ -119,12 +121,13 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
    for(const member of b.cells){
     const color=tone(member);
     box(member.x+side*.69,member.y-member.h/2+.07,member.z,.035,.09,member.d-.12,color);
-    if(!highlight(member))continue;
+    if(!editing||!highlight(member))continue;
     box(member.x+side*.64,member.y,member.z-member.d/2+.03,.035,member.h-.12,.045,'f5ca63');
     box(member.x+side*.64,member.y,member.z+member.d/2-.03,.035,member.h-.12,.045,'f5ca63');
    }
   }
  }
+ if(targetAisle)WarehouseShelves.drawBayFrame(box,selected,targetAisle.x,RACK_WIDTH);
  count=vertices.length/6;
  if(gl){if(!contextLost){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);}vertices=[];}
  invalidate();

@@ -161,3 +161,22 @@ for(let n=4;n<=10;n++){
  const f='S4-F-'+n,g='S4-G-'+n;assert(!e.index([]).has(f));assert(e.canUse([f],'wing'));assert(e.canUse([f],'bumper'));assert(!e.canUse([f],'hood'));
  assert.deepEqual(e.validate([{ids:[f,g],model:'hood'}]),[{ids:[f,g],model:'hood'}]);assert.equal(e.neighbor('S4-J-'+n,1),'S4-K-'+n);
 }
+
+const {drawBayFrame,drawBayApproach}=require('./shelf-models.js');
+const {streets,RACK_WIDTH}=require('./layout.js');
+for(const cell of cells){
+ const aisleX=streets.find(street=>street.id===cell.street).x;
+ const boxes=[],quads=[];
+ drawBayFrame((...args)=>boxes.push(args),cell,aisleX,RACK_WIDTH);
+ drawBayApproach(points=>quads.push(points),cell,aisleX);
+ assert.equal(boxes.length,4);
+ assert.equal(quads.length,4);
+ for(const [x] of boxes)assert(Math.abs(x-aisleX)<Math.abs(cell.x-aisleX)-RACK_WIDTH/2);
+ assert.equal(boxes[0][1],cell.y-cell.h/2);
+ assert.equal(boxes[2][1],cell.y+cell.h/2);
+ for(const points of quads)for(const [x,,z] of points){
+  assert((x-aisleX)/(cell.x-aisleX)>0);
+  assert(Math.abs(x-aisleX)<Math.abs(cell.x-aisleX)-RACK_WIDTH/2);
+  assert(Math.abs(z-cell.z)<cell.d/2);
+ }
+}
