@@ -14,9 +14,9 @@ function createShelfEditor(cells){
   if(!Array.isArray(raw))return out;
   for(const e of raw.slice(0,cells.length)){
    let rawIds=e?.ids;const model=e?.model;
-   // Migrate former A+B merges only in the double-height sections.
+   // Migrate former A+B or F+G merges only in double-height sections.
    if(Array.isArray(rawIds)&&rawIds.length===2&&['hood','shelf'].includes(model)){
-    const cs=rawIds.map(id=>byId.get(id)),a=cs.find(c=>c?.letter==='A'&&span(c)===2),b=cs.find(c=>c?.letter==='B');
+    const cs=rawIds.map(id=>byId.get(id)),a=cs.find(c=>c&&span(c)===2),b=cs.find(c=>a&&c?.letter===(a.letter==='A'?'B':'G'));
     if(a&&b&&sameBay(a,b))rawIds=[a.id];
    }
    const ids=pair(rawIds);
@@ -25,7 +25,7 @@ function createShelfEditor(cells){
   }
   return out;
  }
- function index(entries){const map=new Map(entries.flatMap(e=>e.ids.map(id=>[id,e])));for(const c of cells)if(c.letter==='A'&&span(c)===2&&!map.has(c.id))map.set(c.id,{ids:[c.id],model:'hood'});return map;}
+ function index(entries){const map=new Map(entries.flatMap(e=>e.ids.map(id=>[id,e])));for(const c of cells)if(span(c)===2&&!map.has(c.id))map.set(c.id,{ids:[c.id],model:'hood'});return map;}
  function group(entries,id){return entries.find(e=>e.ids.includes(id))?.ids.slice()||[id];}
  function pick(entries,current,id,replace=false){
   if(!byId.has(id))return current.slice();

@@ -13,7 +13,7 @@ assert.equal(e.apply(s,['S3-E-1','S3-F-1'],'hood'),null);
 assert.equal(e.apply(s,['S3-A-1','S4-B-1'],'hood'),null);
 assert.deepEqual(e.extend(s,['S3-A-1'],1),['S3-A-1','S3-B-1']);
 s=e.apply(s,['S3-B-1','S3-A-1'],'hood');assert.deepEqual(s,[{ids:['S3-A-1','S3-B-1'],model:'hood'}]);
-assert.equal(e.index(s).size,19);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
+assert.equal(e.index(s).size,22);assert.deepEqual(e.pick(s,[],'S3-B-1'),['S3-A-1','S3-B-1']);
 assert.equal(e.apply(s,['S3-B-1'],'wing'),null);
 assert.deepEqual(e.apply(s,['S3-B-1','S3-A-1'],'default'),[]);
 assert.deepEqual(e.validate([{ids:['bogus'],model:'wing'},{ids:['S1-A-1','S1-B-1'],model:'wing'},{ids:['S1-A-1'],model:'__proto__'}]),[]);
@@ -43,7 +43,7 @@ for(const model of ['wing','hood','piston','shelf'])for(const side of [-1,1]){
  }else assert.equal(points.length,0);
  if(model==='piston'){const stock=boxes.filter(v=>['126d83','197f92','1d7183','268b9a'].includes(v[6]));assert(stock.length>50);assert(new Set(stock.map(v=>v[2])).size===5);assert(new Set(stock.map(v=>v[1])).size===6);}
 }
-assert.equal(cells.length,433);
+assert.equal(cells.length,430);
 console.log('Reference shelf models and editor passed');
 
 for(const model of ['wing','hood','piston']){
@@ -144,3 +144,20 @@ for(let n=1;n<=10;n++){
   }
  }
  assert.equal(e.apply([],['S3-A-1','S3-B-1'],'bumper'),null);
+
+for(let n=1;n<=3;n++){
+ const f='S4-F-'+n,g='S4-G-'+n,j='S4-J-'+n;
+ assert.equal(e.index([]).get(f).model,'hood');
+ assert(e.canUse([f],'hood'));assert(!e.canUse([f],'wing'));assert(!e.canUse([f],'piston'));assert(!e.canUse([f],'bumper'));
+ assert.equal(e.extend([],[f],1),null);assert.equal(e.extend([],[g],-1),null);assert.equal(e.neighbor(j,1),null);
+ for(const model of ['hood','shelf'])assert.deepEqual(e.validate([{ids:[f,g],model}]),[{ids:[f],model}]);
+ assert.deepEqual(e.validate([{ids:['S4-K-'+n],model:'wing'}]),[]);
+ const b=e.bounds(e.index([]).get(f));assert(Math.abs(b.h-1.64)<1e-8);
+ for(const side of [-1,1]){
+  let quads=0;drawShelf(()=>{},pts=>{assert(pts.every(p=>p[1]>=b.base-.001&&p[1]<=b.top+.001));quads++;},b,'hood',side,'53677a',true);assert(quads>0);
+ }
+}
+for(let n=4;n<=10;n++){
+ const f='S4-F-'+n,g='S4-G-'+n;assert(!e.index([]).has(f));assert(e.canUse([f],'wing'));assert(e.canUse([f],'bumper'));assert(!e.canUse([f],'hood'));
+ assert.deepEqual(e.validate([{ids:[f,g],model:'hood'}]),[{ids:[f,g],model:'hood'}]);assert.equal(e.neighbor('S4-J-'+n,1),'S4-K-'+n);
+}

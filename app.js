@@ -230,7 +230,7 @@ function updateShelfEditor(){
  $('edit-hood').disabled=!shelfEditor.canUse(editIds,'hood');
  $('edit-reset').disabled=!editIds.some(id=>shelfDesign.some(e=>e.ids.includes(id)));
  $('edit-focus').disabled=!editIds.length;
- $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'A — два уровня под капоты.':editIds.length===1?'Крылья, поршни, бамперы: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
+ $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'Нижняя ячейка — два уровня под капоты.':editIds.length===1?'Крылья, поршни, бамперы: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
 }
 function setEditSelection(ids){
  editIds=ids.slice();selected=cells.find(c=>c.id===editIds[0])||null;
@@ -287,9 +287,9 @@ $('focus-cell').onclick=focusSelected;
 function refreshInventory(data,ready){
  const wasReady=inventoryReady,previous=selected,oldHits=hits,oldItems=cells.map(c=>c.items);
  inventoryReady=ready;const stats=applyInventory(ready?data:null);
- const omitted=ready?WarehouseLayout.unmappedLongE(data):[];
+ const omitted=ready?WarehouseLayout.unmappedAddresses(data):[];
  $('stock-badge').title=omitted.length?'В основной базе есть записи вне 3D-схемы: '+omitted.join(', ')+'.':'Заполненность физических адресов 3D-карты';
- $('stock-badge').textContent=(ready?stats.occupied+' / '+stats.total+' занято':cells.length+' ячеек')+(omitted.length?' · E: '+omitted.length+' вне карты':'');
+ $('stock-badge').textContent=(ready?stats.occupied+' / '+stats.total+' занято':cells.length+' ячеек')+(omitted.length?' · '+omitted.length+' вне карты':'');
  const inventoryChanged=wasReady!==ready||cells.some((c,i)=>c.items!==oldItems[i]);
  if(!inventoryChanged)return;
  if(lastQuery){
