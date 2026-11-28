@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,cellArticles,cellTone,cellFocusPose,linkedCellMatches,routeDistance,articlePopupPosition,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,searchDetails,cellArticles,cellTone,cellFocusPose,linkedCellMatches,routeDistance,articlePopupPosition,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels'), stage=$('stage');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -289,8 +289,23 @@ for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood
 $('edit-focus').onclick=()=>{if(!selected)return;const pose=cellFocusPose(selected);if(!pose)return;const group=editIds.map(id=>cells.find(c=>c.id===id));if(group.length===2){pose.target=[...pose.target];pose.target[1]=(group[0].y+group[1].y)/2;pose.distance=Math.max(pose.distance,3.6);}stopFlight();move(pose,450);};
 
 function select(c){clearRoute(false);selected=c;if(linkedOrder&&!manualOrigin)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}
-function renderMatches(){const result=$('results');result.replaceChildren();
- for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id;b.dataset.cellId=c.id;b.onclick=()=>{resultsExpanded=false;if(c===selected){updateSearchChooser();invalidate();}else select(c);};result.append(b);}
+function refreshSearchMatches(query){
+ const matches=searchDetails(query);
+ hits=matches.map(match=>match.cell);
+ renderMatches(new Map(matches.map(match=>[match.cell,match.line])));
+}
+function renderMatches(lines){
+ const result=$('results');result.replaceChildren();
+ result.classList.toggle('with-details',!!lines&&hits.length>1);
+ for(const c of hits){
+  const b=document.createElement('button');b.type='button';b.textContent=c.id;b.dataset.cellId=c.id;
+  const line=lines?.get(c);
+  if(line){
+   const detail=document.createElement('span');detail.className='match-line';detail.textContent=line;b.append(detail);
+  }
+  b.onclick=()=>{resultsExpanded=false;if(c===selected){updateSearchChooser();invalidate();}else select(c);};
+  result.append(b);
+ }
 }
 function updateSearchChooser(){
  const multiple=hits.length>1;
@@ -320,7 +335,7 @@ function refreshInventory(data,ready){
  const inventoryChanged=wasReady!==ready||cells.some((c,i)=>c.items!==oldItems[i]);
  if(!inventoryChanged)return;
  if(lastQuery){
-  hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
+  if(linkedOrder){hits=linkedHits();renderMatches();}else refreshSearchMatches(lastQuery);
   if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;if(linkedOrder&&selected&&!manualOrigin)focusOrderStreet(selected);}
   
   $('message').textContent=ready?(hits.length?'Найдено: '+hits.length:linkedOrder?'Артикул не найден в текущих остатках. Проверьте адрес в заказе.':'Совпадений нет.'):'Для поиска товара необходимо подключение.';
@@ -331,7 +346,7 @@ function refreshInventory(data,ready){
  updateNavigationMarkers();updateActions();
 }
 window.WarehouseInventory={refresh:refreshInventory};
-function runSearch(q){if(editing){const c=cells.find(c=>c.id===WarehouseLayout.normalizeAddress(q));if(c){pickEdit(c,true);$('edit-focus').onclick();}else $('edit-status').textContent='Введите существующий адрес ячейки, например S3-K-7.';return;}linkedOrder=null;manualOrigin=false;resultsExpanded=true;clearRoute(false);lastQuery=q.trim().slice(0,120);hits=search(q);renderMatches();if(!hits.length){selected=null;renderArticlePopup();$('message').textContent=/^S\s*[1-5]\s*[-,; ]*\s*[A-Z]/i.test(lastQuery)?'Такой ячейки нет на карте.':inventoryReady?'Совпадений нет.':'Для поиска товара войдите через Google.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+function runSearch(q){if(editing){const c=cells.find(c=>c.id===WarehouseLayout.normalizeAddress(q));if(c){pickEdit(c,true);$('edit-focus').onclick();}else $('edit-status').textContent='Введите существующий адрес ячейки, например S3-K-7.';return;}linkedOrder=null;manualOrigin=false;resultsExpanded=true;clearRoute(false);lastQuery=q.trim().slice(0,120);refreshSearchMatches(lastQuery);if(!hits.length){selected=null;renderArticlePopup();$('message').textContent=/^[SС]\s*[1-5][\s,;–—-]*[A-ZАВСЕНК]/iu.test(lastQuery)?'Такой ячейки нет на карте.':inventoryReady?'Совпадений нет.':'Для поиска товара войдите через Google.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
 function updateActions(){
  updateShelfEditor();

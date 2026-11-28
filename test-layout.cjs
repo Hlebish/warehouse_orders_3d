@@ -132,3 +132,13 @@ for(const c of cells)for(const o of points.filter(p=>/^S[1-5]$/.test(p.id))){
  assert(Math.abs(plan.segments.reduce((a,s)=>a+s.length,0)-routeDistance(path))<1e-8);
  for(const s of plan.segments){assert.deepEqual([gpsSample(s,0).x,gpsSample(s,0).z],[s.from.x,s.from.z]);assert.deepEqual([gpsSample(s,1).x,gpsSample(s,1).z],[s.to.x,s.to.z]);}
 }
+
+assert.equal(search('с3–к–07')[0].id,'S3-K-7');
+assert.equal(search('С1-К-7').length,0);
+applyInventory({S2:{A:{1:'AP1234 — Бампер передний\nAP123 — Бампер задний',2:'AP1235 — Бампер левый'}}});
+const detailHits=require('./layout.js').searchDetails('AP123');
+assert.deepEqual(detailHits.map(hit=>[hit.cell.id,hit.line]),[
+ ['S2-A-1','AP123 — Бампер задний'],['S2-A-2','AP1235 — Бампер левый']
+]);
+assert.equal(require('./layout.js').searchDetails('задний')[0].line,'AP123 — Бампер задний');
+applyInventory(null);

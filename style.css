@@ -143,3 +143,7 @@ main.map-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0
 #edit-bumper{border-color:#b5c1c9;background:#344451;color:#f4f4f1}
 
 .gps-marker{position:absolute;width:25px;height:25px;transform:translate(-50%,-50%) rotate(var(--heading,0deg));border:2px solid white;background:#218de8;border-radius:50%;box-shadow:0 0 0 5px #59baff44,0 2px 8px #0009;z-index:3;pointer-events:none}.gps-marker:after{content:'';position:absolute;left:6px;top:3px;width:9px;height:14px;background:white;clip-path:polygon(50% 0,100% 100%,50% 73%,0 100%)}#design-code{width:100%;min-height:44px;resize:vertical;background:#14202d;color:#dce8f2;border:1px solid #52677d;border-radius:5px;font:10px monospace}#design-sync-status{font-size:10px;color:#9eb7ca;overflow-wrap:anywhere}
+
+#stage>#result-panel #results.with-details{grid-template-columns:minmax(0,1fr)}
+#results.with-details button{min-width:0;white-space:normal}
+.match-line{display:block;margin-top:2px;color:inherit;font-size:11px;line-height:1.35;overflow-wrap:anywhere}
