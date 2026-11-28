@@ -103,6 +103,7 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
    for(let i=0;i<=5;i++){
     if(stack.some(c=>i>c.levelStart&&i<c.levelStart+c.levelSpan))continue;
     const lower=stack.find(c=>c.levelStart+c.levelSpan===i),upper=stack.find(c=>c.levelStart===i);
+    if(i===0&&upper&&shelfIndex.get(upper.id)?.model==='wingRepair')continue;
     const group=lower&&shelfIndex.get(lower.id);
     if(group&&upper&&group.ids.includes(upper.id))continue;
     for(const xx of [s.x-RACK_WIDTH/2+.0425,s.x+RACK_WIDTH/2-.0425])box(xx,.12+i*.88,q.z,.08,.085,1.64,'b5262d');
@@ -244,7 +245,7 @@ function updateShelfEditor(){
  if(!editing)return;
  const entry=editIds.length?shelfIndex.get(editIds[0]):null;
  $('edit-address').textContent=editIds.length?editIds.join(' + '):'Выберите ячейку';
- $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты',piston:'Поршни',bumper:'Бамперы',headlight:'Фары · 1 ряд',headlightDouble:'Фары · 2 ряда'}[entry.model]):'Обычная ячейка';
+ $('edit-current').textContent=entry&&entry.ids.length===editIds.length&&entry.ids.every(id=>editIds.includes(id))?({shelf:'Полка',wing:'Крылья',hood:'Капоты',piston:'Поршни',bumper:'Бамперы',headlight:'Фары · 1 ряд',headlightDouble:'Фары · 2 ряда',wingRepair:'Ремкомплекты крыла'}[entry.model]):'Обычная ячейка';
  $('edit-current').hidden=!editIds.length;
  $('edit-upper').disabled=!shelfEditor.extend(shelfDesign,editIds,1);
  $('edit-lower').disabled=!shelfEditor.extend(shelfDesign,editIds,-1);
@@ -254,10 +255,11 @@ function updateShelfEditor(){
  $('edit-bumper').disabled=!shelfEditor.canUse(editIds,'bumper');
  $('edit-headlight').disabled=!shelfEditor.canUse(editIds,'headlight');
  $('edit-headlight-double').disabled=!shelfEditor.canUse(editIds,'headlightDouble');
+ $('edit-wing-repair').disabled=!shelfEditor.canUse(editIds,'wingRepair');
  $('edit-hood').disabled=!shelfEditor.canUse(editIds,'hood');
  $('edit-reset').disabled=!editIds.some(id=>shelfDesign.some(e=>e.ids.includes(id)));
  $('edit-focus').disabled=!editIds.length;
- $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'Нижняя ячейка — два уровня под капоты.':editIds.length===1?'Крылья, поршни, бамперы и фары: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
+ $('edit-help').textContent=!editIds.length?'Коснитесь ячейки или найдите адрес.':editIds.length===1&&shelfEditor.canUse(editIds,'hood')?'Капоты или напольный поддон с ремкомплектами.':editIds.length===1?'Крылья, поршни, бамперы и фары: 1 уровень. Капоты: 2.':'Два уровня: полка или капоты. Адреса сохраняются.';
 }
 function setEditSelection(ids){
  editIds=ids.slice();selected=cells.find(c=>c.id===editIds[0])||null;
@@ -290,7 +292,7 @@ $('design-load').onclick=()=>window.WarehouseDesignCloud?.load();
 
 $('edit-upper').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,1);if(ids)setEditSelection(ids);};
 $('edit-lower').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,-1);if(ids)setEditSelection(ids);};
-for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-bumper','bumper'],['edit-headlight','headlight'],['edit-headlight-double','headlightDouble'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
+for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-bumper','bumper'],['edit-headlight','headlight'],['edit-headlight-double','headlightDouble'],['edit-wing-repair','wingRepair'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
 $('edit-focus').onclick=()=>{if(!selected)return;const pose=cellFocusPose(selected);if(!pose)return;const group=editIds.map(id=>cells.find(c=>c.id===id));if(group.length===2){pose.target=[...pose.target];pose.target[1]=(group[0].y+group[1].y)/2;pose.distance=Math.max(pose.distance,3.6);}stopFlight();move(pose,450);};
 
 function select(c){clearRoute(false);selected=c;if(linkedOrder&&!manualOrigin)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}

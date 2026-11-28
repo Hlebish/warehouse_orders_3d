@@ -197,3 +197,18 @@ for(const [model,rows] of [['headlight',1],['headlightDouble',2]]){
   }
  }
 }
+
+for(const c of cells)assert.equal(e.canUse([c.id],'wingRepair'),c.levelStart===0);
+assert(!e.canUse(['S3-A-1','S3-B-1'],'wingRepair'));
+for(const id of ['S3-A-1','S4-F-1']){
+ const entry=e.apply([],[id],'wingRepair')[0],b=e.bounds(entry);
+ assert.deepEqual(e.validate(JSON.parse(JSON.stringify([entry]))),[entry]);
+ for(const side of [-1,1])for(const occupied of [false,true]){
+  const faces=[];
+  drawShelf(()=>{},points=>faces.push(points),b,entry.model,side,'53677a',occupied);
+  assert.equal(faces.length,occupied?5*12*3:0);
+  for(const face of faces)for(const [x,y,z] of face){
+   assert(Math.abs(x-b.x)<b.w/2 && Math.abs(z-b.z)<b.d/2 && y>.10 && y<.24);
+  }
+ }
+}

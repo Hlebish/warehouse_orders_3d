@@ -1,6 +1,6 @@
 /* Visual shelf customizations only. Never changes inventory addresses. */
 (function(root){
-const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1],bumper:[1],headlight:[1],headlightDouble:[1]});
+const MODELS=Object.freeze({shelf:[1,2],wing:[1],hood:[2],piston:[1],bumper:[1],headlight:[1],headlightDouble:[1],wingRepair:[1,2]});
 function createShelfEditor(cells){
  const byId=new Map(cells.map(c=>[c.id,c]));
  const sameBay=(a,b)=>a&&b&&a.street===b.street&&a.side===b.side&&a.n===b.n;
@@ -8,7 +8,7 @@ function createShelfEditor(cells){
  const adjacent=(a,b)=>sameBay(a,b)&&span(a)===1&&span(b)===1&&Math.abs(Math.abs(a.y-b.y)-.88)<1e-6;
  function neighbor(id,dir){const c=byId.get(id);return cells.find(b=>adjacent(c,b)&&Math.sign(b.y-c.y)===dir)?.id||null;}
  function pair(ids){if(!Array.isArray(ids)||ids.length<1||ids.length>2||new Set(ids).size!==ids.length)return null;const cs=ids.map(id=>byId.get(id));if(cs.some(c=>!c)||cs.length===2&&!adjacent(cs[0],cs[1]))return null;return cs.sort((a,b)=>a.y-b.y).map(c=>c.id);}
- function canUse(ids,model){const p=pair(ids);return !!p&&Object.hasOwn(MODELS,model)&&MODELS[model].includes(p.reduce((sum,id)=>sum+span(byId.get(id)),0));}
+ function canUse(ids,model){const p=pair(ids);if(model==='wingRepair')return !!p&&p.length===1&&byId.get(p[0]).levelStart===0;return !!p&&Object.hasOwn(MODELS,model)&&MODELS[model].includes(p.reduce((sum,id)=>sum+span(byId.get(id)),0));}
  function validate(raw){
   const out=[],used=new Set();
   if(!Array.isArray(raw))return out;
@@ -218,13 +218,40 @@ function headlightCartons(box,b,base,side,rows){
   }
  }
 }
+// Nested stamped wheel arches, resting flat with staggered edges.
+function wingRepairStack(quad,b,base,side){
+ const offsets=[[-.035,.012,-.06],[.028,-.02,.05],[-.018,.03,-.03],[.04,.005,.075],[-.024,-.025,-.05]];
+ for(const [layer,[dx,dz,angle]] of offsets.entries()){
+  const point=(t,r,h)=>{
+   const x=(Math.sin(t)*r-.51)*.87,z=Math.cos(t)*r*.61;
+   return [b.x+side*(dx+x*Math.cos(angle)-z*Math.sin(angle)),
+    base+layer*.018+h,b.z+dz+x*Math.sin(angle)+z*Math.cos(angle)];
+  };
+  const profile=t=>[
+   point(t,1.02+.055*Math.cos(t),.006),
+   point(t,.77,.034),
+   point(t,.67,.027),
+   point(t,.66,.008)
+  ];
+  let prev=profile(0);
+  for(let i=1;i<=12;i++){
+   const next=profile(Math.PI*i/12);
+   for(let band=0;band<3;band++){
+    quad([prev[band],next[band],next[band+1],prev[band+1]],
+     ['9ba8ad','c2cdd0','758289'][band],.87+.12*Math.sin(i*Math.PI/12));
+   }
+   prev=next;
+  }
+ }
+}
 function drawShelf(box,quad,b,model,side,accent,showStock=true){
  box(b.x+side*.57,b.base+.055,b.z,.065,.10,b.d-.06,accent);
  if(model==='shelf')return;
- const base=pallet(box,b);
+ const base=pallet(box,model==='wingRepair'?{...b,base:0}:b);
  // Pistons are stored outside the address inventory: always show their assigned model.
  if(model==='piston'){pistonStock(box,b,base,side);return;}
  if(!showStock)return;
+ if(model==='wingRepair'){wingRepairStack(quad,b,base,side);return;}
  if(model==='headlight'||model==='headlightDouble'){headlightCartons(box,b,base,side,model==='headlight'?1:2);return;}
  if(model==='bumper'){bumperStock(quad,b,base,side);return;}
  for(const pack of packingPlan(b,model)){
