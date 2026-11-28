@@ -379,13 +379,8 @@ function finishRoute(){
  updateActions();
  if(!selected)return;
  $('message').textContent='На месте: '+selected.id;
- const pose=cellFocusPose(selected);
- if(!pose)return;
- // Step back within the aisle on narrow screens to fit the pickup face.
  const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
- const faceOffset=RACK_WIDTH/2+.1;
- const fit=faceOffset+(selected.d+.16)/(2*Math.tan(HALF_FOV)*Math.max(.1,aspect));
- pose.distance=Math.max(pose.distance,Math.min(RACK_WIDTH/2+WarehouseLayout.AISLE_WIDTH-.15,fit));
+ const pose=WarehouseLayout.arrivalPose(selected,aspect);
  move(pose,850);
 }
 function flyRoute(){

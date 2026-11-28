@@ -238,6 +238,16 @@ function cellFocusPose(cell){
  const dx=eye[0]-target[0],dy=eye[1]-target[1],dz=eye[2]-target[2];
  return {target,yaw:Math.atan2(dx,dz),pitch:Math.atan2(dy,Math.hypot(dx,dz)),distance:Math.hypot(dx,dy,dz)};
 }
+// Frame the pickup from higher up the aisle, looking back along the last approach.
+function arrivalPose(cell,aspect){
+ const aisle=streets.find(street=>street.id===cell.street);
+ const side=Math.sign(aisle.x-cell.x);
+ const along=cell.z<3?1:-1;
+ const pitch=24*Math.PI/180,yaw=Math.atan2(side*.42,along*.91);
+ const distance=Math.max(7.8,Math.min(10,4.65/Math.max(.1,aspect)));
+ const faceX=cell.x+side*RACK_WIDTH/2;
+ return {target:[faceX-.35*Math.cos(yaw),cell.y+.68,cell.z+.35*Math.sin(yaw)],yaw,pitch,distance};
+}
 function linkedCellMatches(link,ready){
  if(!link)return [];
  return ready&&link.article?exactArticleMatches(link.article):link.addresses;
@@ -253,5 +263,5 @@ function gpsPlan(path,cell,aspect,halfFov){
 }
 function gpsSample(s,u){u=Math.max(0,Math.min(1,u));const p=u===0?s.from:u===1?s.to:{x:s.from.x+(s.to.x-s.from.x)*u,z:s.from.z+(s.to.z-s.from.z)*u};return {...p,angle:Math.atan2(s.to.x-s.from.x,-(s.to.z-s.from.z))*180/Math.PI};}
 function routeDistance(path){return path.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-path[i].x,p.z-path[i].z),0);}
-const layout={gpsPlan,gpsSample,unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,searchDetails,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={gpsPlan,gpsSample,unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,arrivalPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,searchDetails,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

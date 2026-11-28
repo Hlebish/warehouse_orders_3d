@@ -151,3 +151,17 @@ assert.deepEqual(detailHits.map(hit=>[hit.cell.id,hit.line]),[
 ]);
 assert.equal(require('./layout.js').searchDetails('задний')[0].line,'AP123 — Бампер задний');
 applyInventory(null);
+
+// Both the pickup face and the endpoint on the floor fit the arrival view.
+for(const cell of cells)for(const aspect of [.38,.545,1,2]){
+ const aisle=streets.find(street=>street.id===cell.street);
+ const p=require('./layout.js').arrivalPose(cell,aspect);
+ const sy=Math.sin(p.yaw),cy=Math.cos(p.yaw),sp=Math.sin(p.pitch),cp=Math.cos(p.pitch);
+ for(const [x,y,z] of [[aisle.x,.1,cell.z],[cell.x+Math.sign(aisle.x-cell.x)*.72,cell.y,cell.z]]){
+  const dx=x-p.target[0],dy=y-p.target[1],dz=z-p.target[2],along=dx*sy+dz*cy;
+  const depth=p.distance-along*cp-dy*sp;
+  assert(depth>0);
+  assert(Math.abs(dx*cy-dz*sy)<depth*Math.tan(65*Math.PI/360)*aspect);
+  assert(Math.abs(dy*cp-along*sp)<depth*Math.tan(65*Math.PI/360));
+ }
+}
