@@ -217,6 +217,26 @@ function drawShelf(box,quad,b,model,side,accent,showStock=true){
   if(model==='wing')wingPack(quad,b,base,side,pack);else hoodPack(quad,b,base,side,pack);
  }
 }
-const api={createShelfEditor,drawShelf,packingPlan};
+// Two painted chevrons lead from the aisle centre toward the selected bay.
+function drawBayApproach(quad,cell,aisleX){
+ const towardRack=Math.sign(cell.x-aisleX);
+ for(const distance of [.48,.98]){
+  const tip=aisleX+towardRack*distance;
+  const point=(back,across)=>[tip-towardRack*back,.092,cell.z+across];
+  for(const edge of [-1,1]){
+   quad([point(0,0),point(.25,edge*.34),point(.37,edge*.34),point(.12,0)],'ffcf61');
+  }
+ }
+}
+function drawBayFrame(box,cell,aisleX,rackWidth){
+ const towardAisle=Math.sign(aisleX-cell.x);
+ const x=cell.x+towardAisle*(rackWidth/2+.05);
+ const thickness=.065;
+ for(const edge of [-1,1]){
+  box(x,cell.y+edge*cell.h/2,cell.z,.075,thickness,cell.d+thickness,'ffe197');
+  box(x,cell.y,cell.z+edge*cell.d/2,.075,cell.h-thickness,thickness,'ffbd43');
+ }
+}
+const api={createShelfEditor,drawShelf,packingPlan,drawBayApproach,drawBayFrame};
 if(typeof module!=='undefined')module.exports=api;else root.WarehouseShelves=api;
 })(globalThis);

@@ -24,7 +24,13 @@ for(let s=1;s<=5;s++){
   });
  }
 }
-function normalizeAddress(value){const m=String(value).toUpperCase().trim().match(/^S\s*([1-5])\s*[,;\s-]*([A-HJK])\s*[-,\s]*(0?[1-9]|10)$/);return m?'S'+m[1]+'-'+m[2]+'-'+Number(m[3]):null;}
+const addressLetters={С:'C',А:'A',В:'B',Е:'E',Н:'H',К:'K'};
+function normalizeAddress(value){
+ const text=String(value).normalize('NFKC').trim().toUpperCase();
+ const match=text.match(/^[SС]\s*([1-5])[\s,;–—-]*([A-HJKАВСЕНК])[\s,;–—-]*(0?[1-9]|10)$/u);
+ if(!match)return null;
+ return 'S'+match[1]+'-'+(addressLetters[match[2]]||match[2])+'-'+Number(match[3]);
+}
 // Invisible-only legacy cell strings are not physical stock.
 function inventoryLines(raw){
  if(typeof raw!=='string')return [];
@@ -79,27 +85,30 @@ function searchRecords(items){
  if(!records){records=items.map(item=>({codes:cellArticles([item]).map(normalizeCode),compact:normalizeCode(item),words:normalizeWords(item),structured:/\s+[—–]\s+/u.test(item)}));searchCache.set(items,records);}
  return records;
 }
-function search(value){
+function searchDetails(value){
  const q=String(value).normalize('NFKC').trim().toUpperCase();if(!q)return [];
- const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr);
+ const addr=normalizeAddress(q);if(addr)return cells.filter(c=>c.id===addr).map(cell=>({cell,line:''}));
  const article=normalizeCode(q);
  const isArticle=/^[\p{L}\p{N}\s._/+()-]+$/u.test(q)&&/\d/.test(article)&&article.length>=3;
  const words=normalizeWords(q).split(/\s+/).filter(Boolean),ranked=[];
  for(const c of cells){
-  let score=0;
-  for(const item of searchRecords(c.items)){
-   const codes=item.codes;
-   if(article&&codes.includes(article)){score=3;break;}
-   if(isArticle&&codes.some(code=>code.startsWith(article)))score=Math.max(score,2);
-   else if(isArticle&&codes.some(code=>code.includes(article)))score=Math.max(score,1);
-   // Legacy unstructured rows can contain the article after the name.
-   if(isArticle&&!item.structured&&item.compact.includes(article))score=Math.max(score,1);
-   if(words.length&&words.every(word=>item.words.includes(word)))score=Math.max(score,1);
+  let bestScore=0,bestLine='';
+  const records=searchRecords(c.items);
+  for(const [index,item] of records.entries()){
+   let score=0;
+   if(article&&item.codes.includes(article))score=3;
+   else if(isArticle&&item.codes.some(code=>code.startsWith(article)))score=2;
+   else if(isArticle&&item.codes.some(code=>code.includes(article)))score=1;
+   else if(isArticle&&!item.structured&&item.compact.includes(article))score=1;
+   else if(words.length&&words.every(word=>item.words.includes(word)))score=1;
+   if(score>bestScore){bestScore=score;bestLine=c.items[index];}
+   if(score===3)break;
   }
-  if(score)ranked.push({c,score});
+  if(bestScore)ranked.push({cell:c,score:bestScore,line:bestLine});
  }
- return ranked.sort((a,b)=>b.score-a.score).map(r=>r.c);
+ return ranked.sort((a,b)=>b.score-a.score);
 }
+function search(value){return searchDetails(value).map(match=>match.cell);}
 
 function navigation(streets){
  const points=[{id:"entry",name:"Вход",x:-15,z:3},{id:"photo",name:"Фотозона",x:-14.2,z:8.7},...streets.map(s=>({id:s.id,name:s.id,x:s.x,z:3}))];
@@ -169,18 +178,28 @@ function orderStreetStart(cell,points,route,streets){
  return plan.length?{origin,pose:plan[0].pose}:null;
 }
 
-// Fit the whole warehouse envelope while staying directly over the street.
+// North stays up while a shallow tilt reveals the fronts of the racks.
+const mapPitch=68*Math.PI/180;
+function tiltedMapPose(target,halfWidth,halfDepth,aspect,halfFov,margin){
+ const sin=Math.sin(mapPitch),cos=Math.cos(mapPitch),scale=Math.tan(halfFov)*margin;
+ let distance=10;
+ for(const z of [-halfDepth,halfDepth])for(const y of [0,4.6]){
+  const towardEye=y*sin+z*cos;
+  const vertical=y*cos-z*sin;
+  distance=Math.max(distance,towardEye+halfWidth/(Math.max(.01,aspect)*scale),towardEye+Math.abs(vertical)/scale);
+ }
+ return {target,yaw:0,pitch:mapPitch,distance};
+}
 function streetOverviewPose(point,aspect,halfFov){
  // Keep a common scale for every navigation point, with a modest
  // focus bias towards that point. Full centering on an edge street
  // required excessive zoom-out, especially in portrait mode.
- const ratio=Math.max(.01,aspect),tan=Math.tan(halfFov),margin=.96,bias=.15;
+ const bias=.15;
  const centerZ=-.6;
  const maxX=Math.max(15,...streets.map(s=>Math.abs(s.x)));
  const maxZ=Math.max(Math.abs(3-centerZ),Math.abs(8.7-centerZ));
  const x=16.5+bias*maxX,z=12+bias*maxZ;
- const distance=4.6+Math.max(x/(ratio*tan*margin),z/(tan*margin));
- return {target:[point.x*bias,0,centerZ+(point.z-centerZ)*bias],yaw:0,pitch:Math.PI/2,distance};
+ return tiltedMapPose([point.x*bias,0,centerZ+(point.z-centerZ)*bias],x,z,aspect,halfFov,.96);
 }
 
 // Find the closest compact popup position that does not cover controls.
@@ -229,10 +248,10 @@ function gpsPlan(path,cell,aspect,halfFov){
  const xs=[cell.x,...path.map(p=>p.x)],zs=[cell.z,...path.map(p=>p.z)];
  const minX=Math.min(...xs)-2.1,maxX=Math.max(...xs)+2.1,minZ=Math.min(...zs)-2.1,maxZ=Math.max(...zs)+2.1;
  const target=[(minX+maxX)/2,0,(minZ+maxZ)/2];
- const distance=4.6+Math.max((maxX-minX)/Math.max(.2,aspect),(maxZ-minZ)*1.2)/(2*Math.tan(halfFov)*.8);
- return {pose:{target,yaw:0,pitch:Math.PI/2,distance:Math.max(10,distance)},segments:path.slice(1).map((to,i)=>({from:path[i],to,length:Math.hypot(to.x-path[i].x,to.z-path[i].z)})).filter(s=>s.length>0),total:routeDistance(path)};
+ const pose=tiltedMapPose(target,(maxX-minX)/2,(maxZ-minZ)/2,aspect,halfFov,.8);
+ return {pose,segments:path.slice(1).map((to,i)=>({from:path[i],to,length:Math.hypot(to.x-path[i].x,to.z-path[i].z)})).filter(s=>s.length>0),total:routeDistance(path)};
 }
 function gpsSample(s,u){u=Math.max(0,Math.min(1,u));const p=u===0?s.from:u===1?s.to:{x:s.from.x+(s.to.x-s.from.x)*u,z:s.from.z+(s.to.z-s.from.z)*u};return {...p,angle:Math.atan2(s.to.x-s.from.x,-(s.to.z-s.from.z))*180/Math.PI};}
 function routeDistance(path){return path.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-path[i].x,p.z-path[i].z),0);}
-const layout={gpsPlan,gpsSample,unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={gpsPlan,gpsSample,unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,searchDetails,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const {cells,racks,streets,search,cellArticles,cellTone,cellFocusPose,linkedCellMatches,routeDistance,articlePopupPosition,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
+const {cells,racks,streets,searchDetails,cellArticles,cellTone,cellFocusPose,linkedCellMatches,routeDistance,articlePopupPosition,points,route,sections,RACK_WIDTH,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery}=WarehouseLayout;
 const $=id=>document.getElementById(id), canvas=$('gl'), labels=$('labels'), stage=$('stage');
 const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 const ctx=gl?null:canvas.getContext('2d');if(!gl&&!ctx){$('error').hidden=false;$('error').textContent='3D-рендерер недоступен в этом браузере.';return;}
@@ -84,6 +84,8 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
  for(const {x} of streets){box(x,.006,-.7,.07,.02,22,'a0a9a8');}
  for(let i=1;i<routePath.length;i++){const p=routePath[i-1],q=routePath[i];box((p.x+q.x)/2,.051,(p.z+q.z)/2,Math.abs(p.x-q.x)+.32,.025,Math.abs(p.z-q.z)+.32,'25485d');box((p.x+q.x)/2,.075,(p.z+q.z)/2,Math.abs(p.x-q.x)+.18,.035,Math.abs(p.z-q.z)+.18,'62ccff');}
  if(routePath.length){const first=routePath[0],last=routePath.at(-1);box(first.x,.10,first.z,.52,.06,.52,'a9e878');box(last.x,.10,last.z,.58,.06,.58,'f5ca63');}
+ const targetAisle=selected&&!editing?streets.find(street=>street.id===selected.street):null;
+ if(targetAisle)WarehouseShelves.drawBayApproach(meshQuad,selected,targetAisle.x);
  groundCount=vertices.length;
  const matches=new Set(hits),editSet=new Set(editIds);
  const highlight=c=>editing?editSet.has(c.id):c===selected;
@@ -119,12 +121,13 @@ function build(){vertices=[];box(0,-.18,-.6,33,.32,24,'536172');
    for(const member of b.cells){
     const color=tone(member);
     box(member.x+side*.69,member.y-member.h/2+.07,member.z,.035,.09,member.d-.12,color);
-    if(!highlight(member))continue;
+    if(!editing||!highlight(member))continue;
     box(member.x+side*.64,member.y,member.z-member.d/2+.03,.035,member.h-.12,.045,'f5ca63');
     box(member.x+side*.64,member.y,member.z+member.d/2-.03,.035,member.h-.12,.045,'f5ca63');
    }
   }
  }
+ if(targetAisle)WarehouseShelves.drawBayFrame(box,selected,targetAisle.x,RACK_WIDTH);
  count=vertices.length/6;
  if(gl){if(!contextLost){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);}vertices=[];}
  invalidate();
@@ -193,7 +196,7 @@ for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animat
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
 if(walking&&animation.gpsSegment){gpsPoint=WarehouseLayout.gpsSample(animation.gpsSegment,u);const done=gpsDone+animation.gpsSegment.length*u;$('route-progress').value=gpsTotal?100*done/gpsTotal:100;$('route-distance').textContent='Осталось ≈ '+Math.ceil(Math.max(0,gpsTotal-done))+' м';}
-if(u>=1){if(animation.gpsSegment)gpsDone+=animation.gpsSegment.length;animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;routeArrived=true;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
+if(u>=1){if(animation.gpsSegment)gpsDone+=animation.gpsSegment.length;animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){finishRoute();}}dirty=true;}
  const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);const gpsXY=gpsPoint&&routePath.length?project([gpsPoint.x,.18,gpsPoint.z]):null;gpsMarker.hidden=!gpsXY;if(gpsXY){gpsMarker.style.left=gpsXY[0]+'px';gpsMarker.style.top=gpsXY[1]+'px';gpsMarker.style.setProperty('--heading',gpsPoint.angle+'deg');}for(const m of markers){place(m.el,m.pos);}for(const m of landmarkLabels)place(m.el,m.pos);if(selected&&!(walking&&walkView)){const aisle=streets.find(s=>s.id===selected.street);const side=Math.sign((aisle?.x??selected.x)-selected.x);const xy=project([selected.x+side*.64,selected.y+.20,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+(editing&&editIds.length?editIds.join(' + '):selected.id);selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;if(selected&&walking&&!editing)showArticleFallback();else{articlePopup.hidden=true;$('article-fallback').hidden=true;}}}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};scheduleFrame();}
@@ -289,8 +292,23 @@ for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood
 $('edit-focus').onclick=()=>{if(!selected)return;const pose=cellFocusPose(selected);if(!pose)return;const group=editIds.map(id=>cells.find(c=>c.id===id));if(group.length===2){pose.target=[...pose.target];pose.target[1]=(group[0].y+group[1].y)/2;pose.distance=Math.max(pose.distance,3.6);}stopFlight();move(pose,450);};
 
 function select(c){clearRoute(false);selected=c;if(linkedOrder&&!manualOrigin)focusOrderStreet(c);renderCellDetail();build();updateNavigationMarkers();updateActions();}
-function renderMatches(){const result=$('results');result.replaceChildren();
- for(const c of hits){const b=document.createElement('button');b.type='button';b.textContent=c.id;b.dataset.cellId=c.id;b.onclick=()=>{resultsExpanded=false;if(c===selected){updateSearchChooser();invalidate();}else select(c);};result.append(b);}
+function refreshSearchMatches(query){
+ const matches=searchDetails(query);
+ hits=matches.map(match=>match.cell);
+ renderMatches(new Map(matches.map(match=>[match.cell,match.line])));
+}
+function renderMatches(lines){
+ const result=$('results');result.replaceChildren();
+ result.classList.toggle('with-details',!!lines&&hits.length>1);
+ for(const c of hits){
+  const b=document.createElement('button');b.type='button';b.textContent=c.id;b.dataset.cellId=c.id;
+  const line=lines?.get(c);
+  if(line){
+   const detail=document.createElement('span');detail.className='match-line';detail.textContent=line;b.append(detail);
+  }
+  b.onclick=()=>{resultsExpanded=false;if(c===selected){updateSearchChooser();invalidate();}else select(c);};
+  result.append(b);
+ }
 }
 function updateSearchChooser(){
  const multiple=hits.length>1;
@@ -320,7 +338,7 @@ function refreshInventory(data,ready){
  const inventoryChanged=wasReady!==ready||cells.some((c,i)=>c.items!==oldItems[i]);
  if(!inventoryChanged)return;
  if(lastQuery){
-  hits=linkedOrder?linkedHits():search(lastQuery);renderMatches();
+  if(linkedOrder){hits=linkedHits();renderMatches();}else refreshSearchMatches(lastQuery);
   if(!selected||!hits.includes(selected)){clearRoute(false);selected=hits[0]||null;if(linkedOrder&&selected&&!manualOrigin)focusOrderStreet(selected);}
   
   $('message').textContent=ready?(hits.length?'Найдено: '+hits.length:linkedOrder?'Артикул не найден в текущих остатках. Проверьте адрес в заказе.':'Совпадений нет.'):'Для поиска товара необходимо подключение.';
@@ -331,7 +349,7 @@ function refreshInventory(data,ready){
  updateNavigationMarkers();updateActions();
 }
 window.WarehouseInventory={refresh:refreshInventory};
-function runSearch(q){if(editing){const c=cells.find(c=>c.id===WarehouseLayout.normalizeAddress(q));if(c){pickEdit(c,true);$('edit-focus').onclick();}else $('edit-status').textContent='Введите существующий адрес ячейки, например S3-K-7.';return;}linkedOrder=null;manualOrigin=false;resultsExpanded=true;clearRoute(false);lastQuery=q.trim().slice(0,120);hits=search(q);renderMatches();if(!hits.length){selected=null;renderArticlePopup();$('message').textContent=/^S\s*[1-5]\s*[-,; ]*\s*[A-Z]/i.test(lastQuery)?'Такой ячейки нет на карте.':inventoryReady?'Совпадений нет.':'Для поиска товара войдите через Google.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
+function runSearch(q){if(editing){const c=cells.find(c=>c.id===WarehouseLayout.normalizeAddress(q));if(c){pickEdit(c,true);$('edit-focus').onclick();}else $('edit-status').textContent='Введите существующий адрес ячейки, например S3-K-7.';return;}linkedOrder=null;manualOrigin=false;resultsExpanded=true;clearRoute(false);lastQuery=q.trim().slice(0,120);refreshSearchMatches(lastQuery);if(!hits.length){selected=null;renderArticlePopup();$('message').textContent=/^[SС]\s*[1-5][\s,;–—-]*[A-ZАВСЕНК]/iu.test(lastQuery)?'Такой ячейки нет на карте.':inventoryReady?'Совпадений нет.':'Для поиска товара войдите через Google.';build();updateNavigationMarkers();updateActions();return;}$('message').textContent='Найдено: '+hits.length+'. Выберите действие.';select(hits[0]);}
 function hasStreetOrigin(){return !!origin&&streets.some(s=>s.id===origin.id);}
 function updateActions(){
  updateShelfEditor();
@@ -354,6 +372,22 @@ function updateActions(){
 }
 function wideStreetPose(p){const rect=canvas.getBoundingClientRect();const w=rect.width||canvas.clientWidth||window.innerWidth||380,h=rect.height||canvas.clientHeight||window.innerHeight||640;return streetOverviewPose(p,Math.max(.25,w/Math.max(1,h)),HALF_FOV);}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
+function finishRoute(){
+ walking=false;
+ routeArrived=true;
+ gpsPoint=null;
+ updateActions();
+ if(!selected)return;
+ $('message').textContent='На месте: '+selected.id;
+ const pose=cellFocusPose(selected);
+ if(!pose)return;
+ // Step back within the aisle on narrow screens to fit the pickup face.
+ const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
+ const faceOffset=RACK_WIDTH/2+.1;
+ const fit=faceOffset+(selected.d+.16)/(2*Math.tan(HALF_FOV)*Math.max(.1,aspect));
+ pose.distance=Math.max(pose.distance,Math.min(RACK_WIDTH/2+WarehouseLayout.AISLE_WIDTH-.15,fit));
+ move(pose,850);
+}
 function flyRoute(){
  if(editing)return;
  if(walking){stopFlight();return;}
