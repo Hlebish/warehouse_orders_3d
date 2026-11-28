@@ -223,6 +223,16 @@ function linkedCellMatches(link,ready){
  if(!link)return [];
  return ready&&link.article?exactArticleMatches(link.article):link.addresses;
 }
+// Simulated GPS route over the warehouse plan.
+function gpsPlan(path,cell,aspect,halfFov){
+ if(!path.length||!cell)return null;
+ const xs=[cell.x,...path.map(p=>p.x)],zs=[cell.z,...path.map(p=>p.z)];
+ const minX=Math.min(...xs)-2.1,maxX=Math.max(...xs)+2.1,minZ=Math.min(...zs)-2.1,maxZ=Math.max(...zs)+2.1;
+ const target=[(minX+maxX)/2,0,(minZ+maxZ)/2];
+ const distance=4.6+Math.max((maxX-minX)/Math.max(.2,aspect),(maxZ-minZ)*1.2)/(2*Math.tan(halfFov)*.8);
+ return {pose:{target,yaw:0,pitch:Math.PI/2,distance:Math.max(10,distance)},segments:path.slice(1).map((to,i)=>({from:path[i],to,length:Math.hypot(to.x-path[i].x,to.z-path[i].z)})).filter(s=>s.length>0),total:routeDistance(path)};
+}
+function gpsSample(s,u){u=Math.max(0,Math.min(1,u));const p=u===0?s.from:u===1?s.to:{x:s.from.x+(s.to.x-s.from.x)*u,z:s.from.z+(s.to.z-s.from.z)*u};return {...p,angle:Math.atan2(s.to.x-s.from.x,-(s.to.z-s.from.z))*180/Math.PI};}
 function routeDistance(path){return path.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-path[i].x,p.z-path[i].z),0);}
-const layout={unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
+const layout={gpsPlan,gpsSample,unmappedS1E,unmappedLongE,unmappedAddresses,inventoryLines,cellTone,routeDistance,cellFocusPose,linkedCellMatches,articlePopupPosition,cells,racks,streets,search,cellArticles,normalizeAddress,applyInventory,walkingPlan,orderStreetStart,streetOverviewPose,exactArticleMatches,mapLinkQuery,STREET_SPACING,RACK_WIDTH,RACK_OFFSET,AISLE_WIDTH,...navigation(streets),sections:rackSections(cells,racks)}; if(typeof module!=='undefined')module.exports=layout;else root.WarehouseLayout=layout;
 })(globalThis);

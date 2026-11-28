@@ -124,3 +124,11 @@ for(let n=1;n<=10;n++){
 assert.deepEqual(unmappedAddresses({S1:{E:{4:'OLD1'}},S5:{E:{1:'OLD5'}},S4:{K:{1:'OLD4',2:' ',3:'OLD43',4:'KEEP4'}}}),['S1-E-4','S5-E-1','S4-K-1','S4-K-3']);
 applyInventory({S4:{F:{1:'CAP41'},G:{1:'WING41'},K:{1:'OLD41',4:'KEEP44'}}});
 assert.equal(search('CAP41')[0].id,'S4-F-1');assert.equal(search('WING41')[0].id,'S4-G-1');assert.equal(search('OLD41').length,0);assert.equal(search('KEEP44')[0].id,'S4-K-4');applyInventory(null);
+
+const {gpsPlan,gpsSample}=require('./layout.js');
+for(const c of cells)for(const o of points.filter(p=>/^S[1-5]$/.test(p.id))){
+ const path=route(o,c),plan=gpsPlan(path,c,.55,65*Math.PI/360);
+ assert.equal(plan.pose.pitch,Math.PI/2);assert(plan.pose.distance>=10);
+ assert(Math.abs(plan.segments.reduce((a,s)=>a+s.length,0)-routeDistance(path))<1e-8);
+ for(const s of plan.segments){assert.deepEqual([gpsSample(s,0).x,gpsSample(s,0).z],[s.from.x,s.from.z]);assert.deepEqual([gpsSample(s,1).x,gpsSample(s,1).z],[s.to.x,s.to.z]);}
+}

@@ -16,7 +16,21 @@ const shelfEditor=WarehouseShelves.createShelfEditor(cells);
 let shelfDesign=[],shelfIndex=new Map(),editing=false,editIds=[];
 try{shelfDesign=shelfEditor.validate(JSON.parse(localStorage.getItem('warehouse3d.shelves.v1')||'[]'));}catch{}
 shelfIndex=shelfEditor.index(shelfDesign);
+let designDirty=shelfDesign.length>0;
+try{const flag=localStorage.getItem('warehouse3d.designDirty');if(flag!==null)designDirty=flag==='1';}catch{}
+function saveDesign(dirty){
+ designDirty=dirty;
+ try{localStorage.setItem('warehouse3d.shelves.v1',JSON.stringify(shelfDesign));localStorage.setItem('warehouse3d.designDirty',dirty?'1':'0');return true;}catch{return false;}
+}
+function replaceDesign(raw,dirty){
+ if(!Array.isArray(raw)||raw.length>450)return false;
+ const next=shelfEditor.validate(raw);if(raw.length&&!next.length)return false;
+ shelfDesign=next;shelfIndex=shelfEditor.index(next);saveDesign(dirty);build();updateActions();return true;
+}
+window.WarehouseDesign={get:()=>shelfDesign.slice(),dirty:()=>designDirty,apply:replaceDesign,saved:()=>saveDesign(false),status:s=>{$('design-sync-status').textContent=s;}};
 let frameQueued=false,routeArrived=false,routeStep=0,routeSteps=0,hiddenAt=null;
+let gpsPoint=null,gpsTotal=0,gpsDone=0;
+const gpsMarker=document.createElement('div');gpsMarker.className='gps-marker';gpsMarker.hidden=true;gpsMarker.setAttribute('aria-label','Условное положение на маршруте');labels.appendChild(gpsMarker);
 function scheduleFrame(){if(!frameQueued&&!contextLost){frameQueued=true;requestAnimationFrame(frame);}}
 function invalidate(){dirty=true;scheduleFrame();}
 const mul=(a,k)=>a.map(x=>x*k),add=(a,b)=>a.map((x,i)=>x+b[i]),sub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),norm=a=>mul(a,1/Math.hypot(...a)),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -178,9 +192,9 @@ function frame(t){frameQueued=false;if(contextLost||document.hidden)return;flush
 for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animation.to[key]-animation.from[key])*k;
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
-if(walking&&routeSteps)$('route-progress').value=Math.min(100,(routeStep-1+u)/routeSteps*100);
-if(u>=1){animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;routeArrived=true;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
- const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);for(const m of markers){if(walking&&walkView)m.el.hidden=true;else place(m.el,m.pos);}for(const m of landmarkLabels)place(m.el,m.pos);if(selected&&!(walking&&walkView)){const aisle=streets.find(s=>s.id===selected.street);const side=Math.sign((aisle?.x??selected.x)-selected.x);const xy=project([selected.x+side*.64,selected.y+.20,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+(editing&&editIds.length?editIds.join(' + '):selected.id);selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;if(selected&&walking&&!editing)showArticleFallback();else{articlePopup.hidden=true;$('article-fallback').hidden=true;}}}
+if(walking&&animation.gpsSegment){gpsPoint=WarehouseLayout.gpsSample(animation.gpsSegment,u);const done=gpsDone+animation.gpsSegment.length*u;$('route-progress').value=gpsTotal?100*done/gpsTotal:100;$('route-distance').textContent='Осталось ≈ '+Math.ceil(Math.max(0,gpsTotal-done))+' м';}
+if(u>=1){if(animation.gpsSegment)gpsDone+=animation.gpsSegment.length;animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;routeArrived=true;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
+ const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);const gpsXY=gpsPoint&&routePath.length?project([gpsPoint.x,.18,gpsPoint.z]):null;gpsMarker.hidden=!gpsXY;if(gpsXY){gpsMarker.style.left=gpsXY[0]+'px';gpsMarker.style.top=gpsXY[1]+'px';gpsMarker.style.setProperty('--heading',gpsPoint.angle+'deg');}for(const m of markers){place(m.el,m.pos);}for(const m of landmarkLabels)place(m.el,m.pos);if(selected&&!(walking&&walkView)){const aisle=streets.find(s=>s.id===selected.street);const side=Math.sign((aisle?.x??selected.x)-selected.x);const xy=project([selected.x+side*.64,selected.y+.20,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+(editing&&editIds.length?editIds.join(' + '):selected.id);selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;if(selected&&walking&&!editing)showArticleFallback();else{articlePopup.hidden=true;$('article-fallback').hidden=true;}}}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};scheduleFrame();}
 function stopFlight(){const was=walking;flight=[];animation=null;walking=false;hiddenAt=null;if(was){invalidate();updateActions();$('route-caption').textContent='Маршрут остановлен';}}
@@ -200,9 +214,17 @@ function setWalkSpeed(value){
  retimeWalk(animation,performance.now(),walkSpeed);
  try{localStorage.setItem('warehouse3d.walkSpeed',String(walkSpeed));}catch{}
 }
-function startWalkStep(step){routeStep++;const p=step.pose;const from=camera().eye;move({target:targetFromEye(p.eye,p.yaw,p.pitch,p.distance),yaw:p.yaw,pitch:p.pitch,distance:p.distance},step.phase==='walk'?step.duration/walkSpeed:step.duration);animation.phase=step.phase;animation.baseDuration=step.duration;animation.reducedMotion=animation.duration===1;animation.eyeFrom=from;animation.eyeTo=p.eye;animation.linear=step.phase==='walk';walkView=step.phase!=='approach';$('route-caption').textContent=step.phase==='approach'?'К точке '+origin.name:step.phase==='descend'?'Спуск к началу маршрута':step.phase==='arrive'?'Поворот к '+selected.id:step.phase==='turn'?'Поворот в проход':'Движение по проходу';}
+function startWalkStep(step){
+ routeStep++;
+ if(step.phase==='approach'){move(step.pose,450);animation.phase='approach';$('route-caption').textContent='Маршрут сверху';return;}
+ const segment=step.segment;gpsPoint=WarehouseLayout.gpsSample(segment,0);
+ const duration=Math.max(160,segment.length*440);
+ move({target:[...cam.target],yaw:cam.yaw,pitch:cam.pitch,distance:cam.distance},duration/walkSpeed);
+ animation.phase='walk';animation.baseDuration=duration;animation.reducedMotion=animation.duration===1;animation.linear=true;animation.gpsSegment=segment;
+ $('route-caption').textContent='К '+selected.id+' · по схеме';
+}
 function overview(top=false){stopFlight();walkView=false;const fit=wideStreetPose({x:0,z:-.6});move(top?fit:{target:[0,0,-.5],yaw:.24,pitch:.78,distance:Math.max(47,fit.distance)});}
-function clearRoute(rebuild=true){stopFlight();routePath=[];routeArrived=false;routeStep=0;routeSteps=0;if(rebuild)build();updateNavigationMarkers();updateActions();}
+function clearRoute(rebuild=true){stopFlight();routePath=[];gpsPoint=null;gpsDone=0;gpsTotal=0;routeArrived=false;routeStep=0;routeSteps=0;if(rebuild)build();updateNavigationMarkers();updateActions();}
 let inventoryReady=false,lastQuery='',linkedOrder=null,resultsExpanded=true,manualOrigin=false,lastClearedCell=null;
 function linkedHits(){return linkedCellMatches(linkedOrder,inventoryReady);}
 function focusOrderStreet(cell){
@@ -242,7 +264,7 @@ function changeShelf(model){
  const next=shelfEditor.apply(shelfDesign,editIds,model);
  if(!next){$('edit-status').textContent='Нельзя объединить эти уровни. Сначала разделите соседнюю полку.';return;}
  shelfDesign=next;shelfIndex=shelfEditor.index(next);
- let saved=true;try{localStorage.setItem('warehouse3d.shelves.v1',JSON.stringify(next));}catch{saved=false;}
+ const saved=saveDesign(true);
  if(model==='default'&&editIds.length>1)editIds=editIds.slice(0,1);
  build();updateActions();$('edit-status').textContent=saved?'Сохранено на устройстве.':'Изменено, но браузер не сохранил настройки.';
 }
@@ -256,6 +278,11 @@ function toggleEditor(){
  $('edit-status').textContent='';renderCellDetail();build();updateActions();
 }
 $('edit-mode').onclick=toggleEditor;
+$('design-transfer').onclick=()=>{const box=$('design-code');box.hidden=!box.hidden;if(!box.hidden){box.value=JSON.stringify(shelfDesign);box.focus();box.select();}};
+$('design-import').onclick=()=>{const box=$('design-code');if(box.hidden){box.hidden=false;box.focus();return;}try{const raw=JSON.parse(box.value);if(!Array.isArray(raw)||!confirm('Заменить локальную схему вставленным кодом?'))return;if(!replaceDesign(raw,true))throw Error('bad');$('design-sync-status').textContent='Схема импортирована на устройство.';}catch{$('design-sync-status').textContent='Некорректный код схемы.';}};
+$('design-publish').onclick=()=>window.WarehouseDesignCloud?.publish();
+$('design-load').onclick=()=>window.WarehouseDesignCloud?.load();
+
 $('edit-upper').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,1);if(ids)setEditSelection(ids);};
 $('edit-lower').onclick=()=>{const ids=shelfEditor.extend(shelfDesign,editIds,-1);if(ids)setEditSelection(ids);};
 for(const [id,model] of [['edit-shelf','shelf'],['edit-wing','wing'],['edit-hood','hood'],['edit-piston','piston'],['edit-bumper','bumper'],['edit-reset','default']])$(id).onclick=()=>changeShelf(model);
@@ -321,7 +348,7 @@ function updateActions(){
  $('route-cell').textContent=walking?'■ Остановить':'▶ В путь';
  $('clear-route').hidden=!routePath.length;
  const distance=selected&&hasStreetOrigin()?routeDistance(route(origin,selected)):0;
- $('route-distance').hidden=!(selected&&hasStreetOrigin());$('route-distance').textContent='≈ '+Math.round(distance)+' м по схеме';
+ $('route-distance').hidden=!(selected&&hasStreetOrigin());$('route-distance').textContent=routeArrived?'Прибыли · 0 м':'≈ '+Math.round(distance)+' м по схеме';
  $('route-progress').hidden=!walking;if(!walking)$('route-progress').value=routeArrived?100:0;
  if(!walking)$('route-caption').textContent=routeArrived&&selected?'На месте · '+selected.id:!hasStreetOrigin()?'Выберите S1–S5':!selected?'Выберите ячейку':origin.name+' → '+selected.id;
 }
@@ -332,10 +359,11 @@ function flyRoute(){
  if(walking){stopFlight();return;}
  if(!selected)return;
  if(!hasStreetOrigin()){$('route-caption').textContent='Сначала выберите свою улицу S1–S5';$('route-origin').focus();return;}
- stopFlight();const plan=walkingPlan(origin,selected,route,streets);if(!plan.length)return;
- routePath=route(origin,selected);walking=true;routeArrived=false;routeStep=0;walkView=false;flight=plan;
- const first=flight[0].pose,eye=camera().eye;
- if(Math.hypot(...eye.map((v,i)=>v-first.eye[i]))<.01&&Math.abs(wrapAngle(cam.yaw-first.yaw))<.01&&Math.abs(cam.pitch-first.pitch)<.01){flight.shift();walkView=true;}
+ stopFlight();routePath=route(origin,selected);
+ const plan=WarehouseLayout.gpsPlan(routePath,selected,canvas.clientWidth/Math.max(1,canvas.clientHeight),HALF_FOV);if(!plan)return;
+ walking=true;routeArrived=false;routeStep=0;walkView=false;gpsDone=0;gpsTotal=plan.total;
+ gpsPoint=plan.segments.length?WarehouseLayout.gpsSample(plan.segments[0],0):{...routePath[0],angle:0};
+ flight=[{phase:'approach',pose:plan.pose},...plan.segments.map(segment=>({phase:'walk',segment}))];
  routeSteps=flight.length;build();updateNavigationMarkers();updateActions();startWalkStep(flight.shift());
  $('message').textContent='Маршрут: '+origin.name+' → '+selected.id;
 }
