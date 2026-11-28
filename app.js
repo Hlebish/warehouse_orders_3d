@@ -196,7 +196,7 @@ for(const key of ['yaw','pitch','distance'])cam[key]=animation.from[key]+(animat
 if(animation.eyeFrom){const eye=animation.eyeFrom.map((x,i)=>x+(animation.eyeTo[i]-x)*k);cam.target=targetFromEye(eye,cam.yaw,cam.pitch,cam.distance);}
 else cam.target=animation.from.target.map((x,i)=>x+(animation.to.target[i]-x)*k);
 if(walking&&animation.gpsSegment){gpsPoint=WarehouseLayout.gpsSample(animation.gpsSegment,u);const done=gpsDone+animation.gpsSegment.length*u;$('route-progress').value=gpsTotal?100*done/gpsTotal:100;$('route-distance').textContent='Осталось ≈ '+Math.ceil(Math.max(0,gpsTotal-done))+' м';}
-if(u>=1){if(animation.gpsSegment)gpsDone+=animation.gpsSegment.length;animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){walking=false;routeArrived=true;updateActions();$('message').textContent='На месте: '+(selected?.id||'');$('route-caption').textContent='На месте · '+(selected?.id||'');}}dirty=true;}
+if(u>=1){if(animation.gpsSegment)gpsDone+=animation.gpsSegment.length;animation=null;if(flight.length){startWalkStep(flight.shift());}else if(walking){finishRoute();}}dirty=true;}
  const ratio=renderPixelRatio(canvas.clientWidth,canvas.clientHeight,devicePixelRatio||1,!!gl),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;dirty=true;}if(!dirty)return;dirty=false;basis=camera();if(gl){gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);for(const k of ['eye','right','up','forward'])gl.uniform3fv(uniforms[k],basis[k]);gl.uniform1f(uniforms.aspect,basis.aspect);gl.uniform1f(uniforms.zoom,basis.zoom);gl.drawArrays(gl.TRIANGLES,0,count);}else drawCanvas(w,h);const gpsXY=gpsPoint&&routePath.length?project([gpsPoint.x,.18,gpsPoint.z]):null;gpsMarker.hidden=!gpsXY;if(gpsXY){gpsMarker.style.left=gpsXY[0]+'px';gpsMarker.style.top=gpsXY[1]+'px';gpsMarker.style.setProperty('--heading',gpsPoint.angle+'deg');}for(const m of markers){place(m.el,m.pos);}for(const m of landmarkLabels)place(m.el,m.pos);if(selected&&!(walking&&walkView)){const aisle=streets.find(s=>s.id===selected.street);const side=Math.sign((aisle?.x??selected.x)-selected.x);const xy=project([selected.x+side*.64,selected.y+.20,selected.z]);const w=canvas.clientWidth,h=canvas.clientHeight;const off=!xy||xy[0]<45||xy[0]>w-45||xy[1]<24||xy[1]>h-35;selectionTag.hidden=false;selectionTag.classList.toggle('offscreen',off);selectionTag.textContent=(off?'Цель: ':'')+(editing&&editIds.length?editIds.join(' + '):selected.id);selectionTag.style.left=(xy?clamp(xy[0],65,Math.max(65,w-65)):w/2)+'px';selectionTag.style.top=(xy?clamp(xy[1],48,Math.max(48,h-45)):55)+'px';placeArticlePopup([xy?clamp(xy[0],65,Math.max(65,w-65)):w/2,xy?clamp(xy[1],48,Math.max(48,h-45)):55],off,w,h);}else{selectionTag.hidden=true;if(selected&&walking&&!editing)showArticleFallback();else{articlePopup.hidden=true;$('article-fallback').hidden=true;}}}
 function targetFromEye(eye,yaw,pitch,distance){return sub(eye,[distance*Math.sin(yaw)*Math.cos(pitch),distance*Math.sin(pitch),distance*Math.cos(yaw)*Math.cos(pitch)]);}
 function move(to,duration=550){animation={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?1:duration,from:{...cam,target:[...cam.target]},to:{...cam,...to,yaw:cam.yaw+wrapAngle((to.yaw??cam.yaw)-cam.yaw)}};scheduleFrame();}
@@ -372,6 +372,22 @@ function updateActions(){
 }
 function wideStreetPose(p){const rect=canvas.getBoundingClientRect();const w=rect.width||canvas.clientWidth||window.innerWidth||380,h=rect.height||canvas.clientHeight||window.innerHeight||640;return streetOverviewPose(p,Math.max(.25,w/Math.max(1,h)),HALF_FOV);}
 function navigationDistance(width,height){const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));return Math.max(height,width/aspect)/(2*Math.tan(HALF_FOV));}
+function finishRoute(){
+ walking=false;
+ routeArrived=true;
+ gpsPoint=null;
+ updateActions();
+ if(!selected)return;
+ $('message').textContent='На месте: '+selected.id;
+ const pose=cellFocusPose(selected);
+ if(!pose)return;
+ // Step back within the aisle on narrow screens to fit the pickup face.
+ const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
+ const faceOffset=RACK_WIDTH/2+.1;
+ const fit=faceOffset+(selected.d+.16)/(2*Math.tan(HALF_FOV)*Math.max(.1,aspect));
+ pose.distance=Math.max(pose.distance,Math.min(RACK_WIDTH/2+WarehouseLayout.AISLE_WIDTH-.15,fit));
+ move(pose,850);
+}
 function flyRoute(){
  if(editing)return;
  if(walking){stopFlight();return;}

@@ -19,14 +19,22 @@ const {mapLinkQuery,exactArticleMatches}=require('./layout.js');assert.deepEqual
 
 const {orderStreetStart}=require('./layout.js');for(const c of cells){const start=orderStreetStart(c,points,route,streets);assert.equal(start.origin.id,c.street);assert.deepEqual(start.pose.eye,[streets.find(s=>s.id===c.street).x,14,3]);assert.deepEqual(start.pose,walkingPlan(start.origin,c,route,streets)[0].pose);}assert.equal(orderStreetStart(null,points,route,streets),null);console.log('OK: order street focus for all 430 cells');
 
-const {streetOverviewPose}=require('./layout.js');for(const point of points.filter(p=>/^S[1-5]$/.test(p.id)))for(const aspect of [.32,.45,.6,1,1.5,2.2,3]){const half=65*Math.PI/360,p=streetOverviewPose(point,aspect,half);assert.deepEqual(p.target,[point.x*.15,0,-.6+(point.z+.6)*.15]);assert.equal(p.pitch,Math.PI/2);for(const x of [-16.5,16.5])for(const z of [-12.6,11.4])for(const y of [0,4.6]){assert(Math.abs(x-p.target[0])/((p.distance-y)*Math.tan(half)*aspect)<=.96000001);assert(Math.abs(z-p.target[2])/((p.distance-y)*Math.tan(half))<=.96000001);}}console.log('OK: whole warehouse visible from each street in seven screen ratios');
+const {streetOverviewPose}=require('./layout.js');
+function checkProjection(p,x,y,z,aspect,half,margin){
+ const dy=y-p.target[1],dz=z-p.target[2];
+ const depth=p.distance-dy*Math.sin(p.pitch)-dz*Math.cos(p.pitch);
+ assert(depth>0);
+ assert(Math.abs(x-p.target[0])/(depth*Math.tan(half)*aspect)<=margin+1e-8);
+ assert(Math.abs(dy*Math.cos(p.pitch)-dz*Math.sin(p.pitch))/(depth*Math.tan(half))<=margin+1e-8);
+}
+for(const point of points.filter(p=>/^S[1-5]$/.test(p.id)))for(const aspect of [.32,.45,.6,1,1.5,2.2,3]){const half=65*Math.PI/360,p=streetOverviewPose(point,aspect,half);assert.deepEqual(p.target,[point.x*.15,0,-.6+(point.z+.6)*.15]);assert(p.pitch>Math.PI/4&&p.pitch<Math.PI/2);for(const x of [-16.5,16.5])for(const z of [-12.6,11.4])for(const y of [0,4.6]){checkProjection(p,x,y,z,aspect,half,.96);}}console.log('OK: whole warehouse visible from each street in seven screen ratios');
 
 for(const point of points.filter(p=>/^S[1-5]$/.test(p.id)))for(const aspect of [.25,.32,.45,.6,1,1.5,2.2,3]){const p=streetOverviewPose(point,aspect,65*Math.PI/360);assert(p.distance<1000);assert(p.distance>4.6);}
 
 for(const aspect of [.25,.32,.45,.6,1,1.5,2.2,3]){const all=points.filter(p=>/^S[1-5]$/.test(p.id));const height=streetOverviewPose(all[0],aspect,65*Math.PI/360).distance;for(const i of [0,1,2,3,4,3,2,1,0,4,4,2,0])assert.equal(streetOverviewPose(all[i],aspect,65*Math.PI/360).distance,height);}console.log('OK: constant street scale through repeated selections');
 
 // All seven navigation points fit the complete warehouse at a fixed scale.
-for(const aspect of [.25,.32,.45,.58,.6,.8,1,1.5,2.2,3]){const half=65*Math.PI/360,baseline=streetOverviewPose(points[0],aspect,half).distance;for(const point of points){const p=streetOverviewPose(point,aspect,half);assert.equal(p.distance,baseline);for(const x of [-16.5,16.5])for(const z of [-12.6,11.4])for(const y of [0,4.6]){assert(Math.abs(x-p.target[0])/((p.distance-y)*Math.tan(half)*aspect)<=.96000001);assert(Math.abs(z-p.target[2])/((p.distance-y)*Math.tan(half))<=.96000001);}if(aspect<=.8)assert(33/(2*p.distance*Math.tan(half)*aspect)>.73);}}
+for(const aspect of [.25,.32,.45,.58,.6,.8,1,1.5,2.2,3]){const half=65*Math.PI/360,baseline=streetOverviewPose(points[0],aspect,half).distance;for(const point of points){const p=streetOverviewPose(point,aspect,half);assert.equal(p.distance,baseline);for(const x of [-16.5,16.5])for(const z of [-12.6,11.4])for(const y of [0,4.6]){checkProjection(p,x,y,z,aspect,half,.96);}if(aspect<=.8)assert(33/(2*(p.distance-4.6*Math.sin(p.pitch)-11.4*Math.cos(p.pitch))*Math.tan(half)*aspect)>.73);}}
 console.log('OK: larger portrait framing and constant scale for all navigation points');
 
 const {sections}=require('./layout.js');assert.equal(sections.length,18);assert.equal(sections.flatMap(s=>s.members).length,430);assert.equal(new Set(sections.flatMap(s=>s.members.map(c=>c.id))).size,430);assert(!('blockers' in require('./layout.js')));console.log('OK: all rack sections rendered, no occlusion mechanism');
@@ -128,7 +136,8 @@ assert.equal(search('CAP41')[0].id,'S4-F-1');assert.equal(search('WING41')[0].id
 const {gpsPlan,gpsSample}=require('./layout.js');
 for(const c of cells)for(const o of points.filter(p=>/^S[1-5]$/.test(p.id))){
  const path=route(o,c),plan=gpsPlan(path,c,.55,65*Math.PI/360);
- assert.equal(plan.pose.pitch,Math.PI/2);assert(plan.pose.distance>=10);
+ assert(plan.pose.pitch>Math.PI/4&&plan.pose.pitch<Math.PI/2);
+ for(const pt of [...path,c])checkProjection(plan.pose,pt.x,pt.y||0,pt.z,.55,65*Math.PI/360,.8);assert(plan.pose.distance>=10);
  assert(Math.abs(plan.segments.reduce((a,s)=>a+s.length,0)-routeDistance(path))<1e-8);
  for(const s of plan.segments){assert.deepEqual([gpsSample(s,0).x,gpsSample(s,0).z],[s.from.x,s.from.z]);assert.deepEqual([gpsSample(s,1).x,gpsSample(s,1).z],[s.to.x,s.to.z]);}
 }
